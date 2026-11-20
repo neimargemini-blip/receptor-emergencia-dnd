@@ -1,0 +1,6 @@
+<resources>
+    <string name="app_name">Receptor de Emergência</string>
+    <string name="channel_name">Alertas Críticos de Chamada</string>
+    <string name="channel_description">Canal com permissão para furar o Não Perturbe durante chamadas telefônicas de emergência.</string>
+    <string name="dnd_warning">O Android exige autorização explícita do usuário para furar o modo Não Perturbe. Sem conceder \&apos;Acesso ao Não Perturbe\&apos;, o sistema silenciará qualquer chamada.</string>
+</resources>

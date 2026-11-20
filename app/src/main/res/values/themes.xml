@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.EmergencyCallBypass" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:statusBarColor">#B71C1C</item>
+        <item name="android:navigationBarColor">#120303</item>
+    </style>
+
+    <style name="Theme.EmergencyCallBypass.FullScreen" parent="Theme.EmergencyCallBypass">
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowFullscreen">true</item>
+        <item name="android:keepScreenOn">true</item>
+        <item name="android:windowBackground">@color/emergency_bg</item>
+    </style>
+</resources>
