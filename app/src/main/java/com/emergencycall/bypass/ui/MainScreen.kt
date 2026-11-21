@@ -225,7 +225,7 @@ fun MainScreen(viewModel: MainViewModel) {
                     // ABA 0: ENVIAR SOS (Destaque Visual Máximo)
                     Box(
                         modifier = Modifier
-                            .weight(1.1f)
+                            .weight(1f)
                             .clip(RoundedCornerShape(12.dp))
                             .background(
                                 if (selectedTab == 0) {
@@ -246,7 +246,7 @@ fun MainScreen(viewModel: MainViewModel) {
                                 modifier = Modifier.size(22.dp)
                             )
                             Spacer(modifier = Modifier.width(4.dp))
-                            Column {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text(
                                     text = "ENVIAR SOS",
                                     fontWeight = FontWeight.Black,
@@ -287,7 +287,7 @@ fun MainScreen(viewModel: MainViewModel) {
                                 modifier = Modifier.size(20.dp)
                             )
                             Spacer(modifier = Modifier.width(4.dp))
-                            Column {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text(
                                     text = "RECEBER",
                                     fontWeight = FontWeight.Black,
@@ -307,7 +307,7 @@ fun MainScreen(viewModel: MainViewModel) {
                     // ABA 2: DEMONSTRAÇÃO (Testes e Demonstrações ao Vivo)
                     Box(
                         modifier = Modifier
-                            .weight(1.05f)
+                            .weight(1f)
                             .clip(RoundedCornerShape(12.dp))
                             .background(
                                 if (selectedTab == 2) {
@@ -328,7 +328,7 @@ fun MainScreen(viewModel: MainViewModel) {
                                 modifier = Modifier.size(20.dp)
                             )
                             Spacer(modifier = Modifier.width(4.dp))
-                            Column {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text(
                                     text = "DEMONSTRAÇÃO",
                                     fontWeight = FontWeight.Black,
@@ -877,11 +877,9 @@ fun MainScreen(viewModel: MainViewModel) {
                     Spacer(modifier = Modifier.height(14.dp))
 
                     // Permissões do Sistema
-                    Text(
-                        text = "Permissões de Recepção",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
+                    SectionHeader(
+                        title = "Permissões de Recepção",
+                        subtitle = "Itens em amarelo precisam de atenção para o alarme funcionar"
                     )
 
                     Spacer(modifier = Modifier.height(8.dp))
@@ -1934,6 +1932,29 @@ fun SimpleContactItemCard(
                     )
                 }
             }
+        }
+    }
+}
+
+/**
+ * Cabeçalho padronizado de seção (título + subtítulo opcional)
+ */
+@Composable
+fun SectionHeader(title: String, subtitle: String? = null) {
+    Column(modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 6.dp)) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            color = Color.White
+        )
+        if (subtitle != null) {
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = TextSecondary,
+                fontSize = 11.sp
+            )
         }
     }
 }
