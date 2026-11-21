@@ -44,7 +44,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val receiverContacts: StateFlow<List<EmergencyContact>> = contactStorage.receiverContactsFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    // 2. Contatos para ENVIAR SOS (Recebem meu SMS a cada 1m com GPS e ligação viva-voz)
+    // 2. Contatos para ENVIAR SOS (Recebem meu SMS a cada 10s com GPS e ligação viva-voz)
     val senderContacts: StateFlow<List<EmergencyContact>> = contactStorage.senderContactsFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
@@ -61,6 +61,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val isSosRunning: StateFlow<Boolean> = SosEmitterService.isSosRunning
     val sosStartedAt: StateFlow<Long?> = SosEmitterService.sosStartedAt
     val lastMapsUrl: StateFlow<String?> = SosEmitterService.lastMapsUrl
+    val lastCoordinates: StateFlow<Pair<Double, Double>?> = SosEmitterService.lastCoordinates
     val totalSmsSent: StateFlow<Int> = SosEmitterService.totalSmsSent
     val secondsToNextSms: StateFlow<Int> = SosEmitterService.secondsToNextSms
 

@@ -17,6 +17,9 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
@@ -54,6 +57,8 @@ fun EmergencyCallScreen(
         "SMS" -> Triple("ALERTA DE SMS", Icons.Default.Sms, Color(0xFFFF9800))
         else -> Triple("CHAMADA TELEFÔNICA", Icons.Default.Call, RedPrimary)
     }
+
+    var showInAppMap by remember { mutableStateOf(false) }
 
     Box(
         modifier = Modifier
@@ -295,29 +300,73 @@ fun EmergencyCallScreen(
                                     }
                                 }
                             }
+
+                            if (showInAppMap) {
+                                Spacer(modifier = Modifier.height(12.dp))
+                                EmbeddedMapView(
+                                    latitude = coords.first,
+                                    longitude = coords.second,
+                                    title = "SOS: $callerName",
+                                    heightDp = 220,
+                                    showControls = false
+                                )
+                            }
                         }
 
                         Spacer(modifier = Modifier.height(14.dp))
 
-                        Button(
-                            onClick = {
-                                com.emergencycall.bypass.util.LocationParser.openGoogleMaps(context, effectiveMapsUrl)
-                                onSilence()
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00C853)),
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(56.dp)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Icon(Icons.Default.Map, contentDescription = null, tint = Color.White, modifier = Modifier.size(24.dp))
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Text(
-                                text = "ABRIR NO GOOGLE MAPS",
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Black,
-                                color = Color.White
-                            )
+                            if (coords != null) {
+                                OutlinedButton(
+                                    onClick = { showInAppMap = !showInAppMap },
+                                    shape = RoundedCornerShape(12.dp),
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(52.dp),
+                                    border = androidx.compose.foundation.BorderStroke(1.5.dp, Color(0xFF00E676)),
+                                    colors = ButtonDefaults.outlinedButtonColors(
+                                        containerColor = if (showInAppMap) Color(0xFF1B5E20) else Color.Transparent
+                                    )
+                                ) {
+                                    Icon(
+                                        imageVector = if (showInAppMap) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                        contentDescription = null,
+                                        tint = Color.White,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = if (showInAppMap) "OCULTAR MAPA" else "VER NO APP",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White
+                                    )
+                                }
+                            }
+
+                            Button(
+                                onClick = {
+                                    com.emergencycall.bypass.util.LocationParser.openGoogleMaps(context, effectiveMapsUrl)
+                                    onSilence()
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00C853)),
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier
+                                    .weight(if (coords != null) 1.2f else 1f)
+                                    .height(52.dp)
+                            ) {
+                                Icon(Icons.Default.Map, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "GOOGLE MAPS",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Black,
+                                    color = Color.White
+                                )
+                            }
                         }
                     }
                 }

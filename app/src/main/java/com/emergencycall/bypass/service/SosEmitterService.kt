@@ -53,10 +53,15 @@ class SosEmitterService : Service() {
         private val _lastMapsUrl = MutableStateFlow<String?>(null)
         val lastMapsUrl: StateFlow<String?> = _lastMapsUrl.asStateFlow()
 
+        // Coordenadas exatas em tempo real para visualização do mapa dentro do app
+        private val _lastCoordinates = MutableStateFlow<Pair<Double, Double>?>(null)
+        val lastCoordinates: StateFlow<Pair<Double, Double>?> = _lastCoordinates.asStateFlow()
+
         private val _totalSmsSent = MutableStateFlow(0)
         val totalSmsSent: StateFlow<Int> = _totalSmsSent.asStateFlow()
 
-        private val _secondsToNextSms = MutableStateFlow(60)
+        // Envio periódico a cada 10 segundos
+        private val _secondsToNextSms = MutableStateFlow(10)
         val secondsToNextSms: StateFlow<Int> = _secondsToNextSms.asStateFlow()
 
         fun start(context: Context) {
@@ -108,7 +113,7 @@ class SosEmitterService : Service() {
         _isSosRunning.value = true
         _sosStartedAt.value = System.currentTimeMillis()
         _totalSmsSent.value = 0
-        _secondsToNextSms.value = 60
+        _secondsToNextSms.value = 10
 
         if (wakeLock?.isHeld == false) {
             wakeLock?.acquire(60 * 60 * 1000L /* 1 hora max */)
@@ -137,14 +142,14 @@ class SosEmitterService : Service() {
         // 1. Tenta realizar a chamada com viva-voz para o primeiro contato ativo
         makePhoneCallWithSpeakerphone()
 
-        // 2. Inicia loop de envio de localização via SMS a cada 1 minuto (60 segundos)
+        // 2. Inicia loop de envio de localização nativa via SMS a cada 10 segundos
         sosJob = serviceScope.launch {
             while (isActive && _isSosRunning.value) {
                 // Dispara o envio imediato da localização atual
                 sendLocationSmsToAllContacts()
 
-                // Contagem regressiva de 60 segundos até o próximo envio
-                for (sec in 60 downTo 1) {
+                // Contagem regressiva de 10 segundos até o próximo envio
+                for (sec in 10 downTo 1) {
                     _secondsToNextSms.value = sec
                     delay(1000L)
                     if (!_isSosRunning.value) break
@@ -166,6 +171,7 @@ class SosEmitterService : Service() {
         val timeStr = timeFormat.format(Date())
 
         val mapsUrl = if (location != null) {
+            _lastCoordinates.value = Pair(location.latitude, location.longitude)
             LocationHelper.buildMapsLink(location.latitude, location.longitude)
         } else {
             _lastMapsUrl.value ?: "https://www.google.com/maps"
@@ -187,7 +193,7 @@ class SosEmitterService : Service() {
             NOTIFICATION_ID,
             createNotification(
                 "🚨 SOS ATIVO - Localização Enviada",
-                "SMS enviado para $sentThisRound contatos. Próximo envio em 1 minuto."
+                "SMS enviado para $sentThisRound contatos. Próximo envio em 10 segundos."
             )
         )
     }

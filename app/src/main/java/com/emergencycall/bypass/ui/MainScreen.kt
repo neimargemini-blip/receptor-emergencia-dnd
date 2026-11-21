@@ -72,6 +72,7 @@ fun MainScreen(viewModel: MainViewModel) {
     // Estados do Modo Emissor de SOS
     val isSosRunning by viewModel.isSosRunning.collectAsState()
     val lastMapsUrl by viewModel.lastMapsUrl.collectAsState()
+    val lastCoordinates by viewModel.lastCoordinates.collectAsState()
     val totalSmsSent by viewModel.totalSmsSent.collectAsState()
     val secondsToNextSms by viewModel.secondsToNextSms.collectAsState()
     val sosCountdown by viewModel.sosCountdown.collectAsState()
@@ -87,7 +88,7 @@ fun MainScreen(viewModel: MainViewModel) {
     // Auto-Reinício se for fechado
     val isAutoRestartEnabled by viewModel.isAutoRestartEnabled.collectAsState()
 
-    // 0 = ENVIAR SOS (Destaque Principal) | 1 = RECEBER (Receptor Não Perturbe)
+    // 0 = ENVIAR SOS | 1 = RECEBER | 2 = DEMONSTRAÇÃO
     var selectedTab by remember { mutableIntStateOf(0) }
     var showAddDialog by remember { mutableStateOf(false) }
     var dialogTarget by remember { mutableStateOf(ContactDialogTarget.RECEIVER) }
@@ -95,6 +96,10 @@ fun MainScreen(viewModel: MainViewModel) {
     var showBackgroundSettingsDialog by remember { mutableStateOf(false) }
     var newName by remember { mutableStateOf("") }
     var newPhone by remember { mutableStateOf("") }
+
+    // Diálogo de Mapa Embutido no App
+    var mapDialogCoords by remember { mutableStateOf<Pair<Double, Double>?>(null) }
+    var mapDialogTitle by remember { mutableStateOf("") }
 
     // Atualiza permissões sempre que o app volta para o primeiro plano
     DisposableEffect(lifecycleOwner) {
@@ -200,7 +205,7 @@ fun MainScreen(viewModel: MainViewModel) {
                 .padding(padding)
                 .background(Color(0xFF0F0F0F))
         ) {
-            // ==================== AS DUAS GRANDES ABAS NA TELA PRINCIPAL ====================
+            // ==================== AS TRÊS GRANDES ABAS NA TELA PRINCIPAL ====================
             Card(
                 colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1E1E)),
                 shape = RoundedCornerShape(bottomStart = 20.dp, bottomEnd = 20.dp),
@@ -211,13 +216,14 @@ fun MainScreen(viewModel: MainViewModel) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(8.dp)
+                        .padding(6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    // ABA 1: ENVIAR SOS (Destaque Visual Máximo)
+                    // ABA 0: ENVIAR SOS (Destaque Visual Máximo)
                     Box(
                         modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(14.dp))
+                            .weight(1.1f)
+                            .clip(RoundedCornerShape(12.dp))
                             .background(
                                 if (selectedTab == 0) {
                                     Brush.horizontalGradient(listOf(Color(0xFFD50000), Color(0xFFFF1744)))
@@ -226,7 +232,7 @@ fun MainScreen(viewModel: MainViewModel) {
                                 }
                             )
                             .clickable { selectedTab = 0 }
-                            .padding(vertical = 12.dp),
+                            .padding(vertical = 10.dp, horizontal = 4.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -234,19 +240,19 @@ fun MainScreen(viewModel: MainViewModel) {
                                 imageVector = if (isSosRunning) Icons.Default.Warning else Icons.Default.Sos,
                                 contentDescription = null,
                                 tint = if (selectedTab == 0) Color.White else Color.Gray,
-                                modifier = Modifier.size(26.dp)
+                                modifier = Modifier.size(22.dp)
                             )
-                            Spacer(modifier = Modifier.width(8.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
                             Column {
                                 Text(
                                     text = "ENVIAR SOS",
                                     fontWeight = FontWeight.Black,
-                                    fontSize = 15.sp,
+                                    fontSize = 11.sp,
                                     color = if (selectedTab == 0) Color.White else Color.LightGray
                                 )
                                 Text(
-                                    text = if (isSosRunning) "🚨 TRANSMITINDO" else if (sosCountdown != null) "⏳ INICIANDO EM ${sosCountdown}s" else "GPS + SMS a cada 1m",
-                                    fontSize = 10.sp,
+                                    text = if (isSosRunning) "🚨 10s ATIVO" else if (sosCountdown != null) "⏳ ${sosCountdown}s" else "A cada 10s",
+                                    fontSize = 9.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     color = if (selectedTab == 0) Color(0xFFFFEB3B) else Color.Gray
                                 )
@@ -254,13 +260,11 @@ fun MainScreen(viewModel: MainViewModel) {
                         }
                     }
 
-                    Spacer(modifier = Modifier.width(8.dp))
-
-                    // ABA 2: RECEBER (Receptor Não Perturbe)
+                    // ABA 1: RECEBER (Receptor Não Perturbe)
                     Box(
                         modifier = Modifier
                             .weight(1f)
-                            .clip(RoundedCornerShape(14.dp))
+                            .clip(RoundedCornerShape(12.dp))
                             .background(
                                 if (selectedTab == 1) {
                                     Brush.horizontalGradient(listOf(Color(0xFF1565C0), Color(0xFF1E88E5)))
@@ -269,7 +273,7 @@ fun MainScreen(viewModel: MainViewModel) {
                                 }
                             )
                             .clickable { selectedTab = 1 }
-                            .padding(vertical = 12.dp),
+                            .padding(vertical = 10.dp, horizontal = 4.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -277,21 +281,62 @@ fun MainScreen(viewModel: MainViewModel) {
                                 Icons.Default.CallReceived,
                                 contentDescription = null,
                                 tint = if (selectedTab == 1) Color.White else Color.Gray,
-                                modifier = Modifier.size(24.dp)
+                                modifier = Modifier.size(20.dp)
                             )
-                            Spacer(modifier = Modifier.width(8.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
                             Column {
                                 Text(
                                     text = "RECEBER",
                                     fontWeight = FontWeight.Black,
-                                    fontSize = 15.sp,
+                                    fontSize = 11.sp,
                                     color = if (selectedTab == 1) Color.White else Color.LightGray
                                 )
                                 Text(
-                                    text = if (isMonitoringActive) "Furar Não Perturbe" else "Pausado",
-                                    fontSize = 10.sp,
+                                    text = if (isMonitoringActive) "Furar DND" else "Pausado",
+                                    fontSize = 9.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     color = if (selectedTab == 1) Color(0xFF80D8FF) else Color.Gray
+                                )
+                            }
+                        }
+                    }
+
+                    // ABA 2: DEMONSTRAÇÃO (Testes e Demonstrações ao Vivo)
+                    Box(
+                        modifier = Modifier
+                            .weight(1.05f)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(
+                                if (selectedTab == 2) {
+                                    Brush.horizontalGradient(listOf(Color(0xFF6A1B9A), Color(0xFF8E24AA)))
+                                } else {
+                                    Brush.horizontalGradient(listOf(Color(0xFF2A2A2A), Color(0xFF2A2A2A)))
+                                }
+                            )
+                            .clickable { selectedTab = 2 }
+                            .padding(vertical = 10.dp, horizontal = 4.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                Icons.Default.Explore,
+                                contentDescription = null,
+                                tint = if (selectedTab == 2) Color.White else Color.Gray,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Column {
+                                Text(
+                                    text = "DEMONSTRAÇÃO",
+                                    fontWeight = FontWeight.Black,
+                                    fontSize = 10.sp,
+                                    color = if (selectedTab == 2) Color.White else Color.LightGray
+                                )
+                                Text(
+                                    text = "Testes & Mapa",
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = if (selectedTab == 2) Color(0xFFE1BEE7) else Color.Gray
                                 )
                             }
                         }
@@ -340,64 +385,70 @@ fun MainScreen(viewModel: MainViewModel) {
                     Spacer(modifier = Modifier.height(12.dp))
                 }
 
-                if (selectedTab == 0) {
-                    // ==========================================
-                    // ABA 1: ENVIAR SOS (COM CONTAGEM DE 10s)
-                    // ==========================================
-                    SosHeroSection(
-                        isSosRunning = isSosRunning,
-                        sosCountdown = sosCountdown,
-                        totalSmsSent = totalSmsSent,
-                        secondsToNextSms = secondsToNextSms,
-                        lastMapsUrl = lastMapsUrl,
-                        contactsCount = senderContacts.filter { it.isEnabled }.size,
-                        hasGpsPermission = permissionsStatus.hasLocationPermissions,
-                        hasSmsPermission = permissionsStatus.hasSendSmsPermission,
-                        onRequestGps = {
-                            locationPermissionLauncher.launch(
-                                arrayOf(
-                                    Manifest.permission.ACCESS_FINE_LOCATION,
-                                    Manifest.permission.ACCESS_COARSE_LOCATION
+                when (selectedTab) {
+                    0 -> {
+                        // ==========================================
+                        // ABA 0: ENVIAR SOS (COM CONTAGEM E LOOP DE 10s)
+                        // ==========================================
+                        SosHeroSection(
+                            isSosRunning = isSosRunning,
+                            sosCountdown = sosCountdown,
+                            totalSmsSent = totalSmsSent,
+                            secondsToNextSms = secondsToNextSms,
+                            lastMapsUrl = lastMapsUrl,
+                            lastCoordinates = lastCoordinates,
+                            contactsCount = senderContacts.filter { it.isEnabled }.size,
+                            hasGpsPermission = permissionsStatus.hasLocationPermissions,
+                            hasSmsPermission = permissionsStatus.hasSendSmsPermission,
+                            onRequestGps = {
+                                locationPermissionLauncher.launch(
+                                    arrayOf(
+                                        Manifest.permission.ACCESS_FINE_LOCATION,
+                                        Manifest.permission.ACCESS_COARSE_LOCATION
+                                    )
                                 )
-                            )
-                        },
-                        onRequestSms = {
-                            smsPermissionLauncher.launch(
-                                arrayOf(
-                                    Manifest.permission.SEND_SMS,
-                                    Manifest.permission.RECEIVE_SMS,
-                                    Manifest.permission.READ_SMS
+                            },
+                            onRequestSms = {
+                                smsPermissionLauncher.launch(
+                                    arrayOf(
+                                        Manifest.permission.SEND_SMS,
+                                        Manifest.permission.RECEIVE_SMS,
+                                        Manifest.permission.READ_SMS
+                                    )
                                 )
-                            )
-                        },
-                        onOpenSettings = {
-                            context.startActivity(PermissionHelper.getAppSettingsIntent(context))
-                        },
-                        onTriggerSos = { viewModel.triggerSosButtonClick() },
-                        onCancelCountdown = { viewModel.cancelSosCountdown() },
-                        onStopSos = { viewModel.stopEmergencySos() }
-                    )
+                            },
+                            onOpenSettings = {
+                                context.startActivity(PermissionHelper.getAppSettingsIntent(context))
+                            },
+                            onTriggerSos = { viewModel.triggerSosButtonClick() },
+                            onCancelCountdown = { viewModel.cancelSosCountdown() },
+                            onStopSos = { viewModel.stopEmergencySos() },
+                            onViewInAppMap = { lat, lng, title ->
+                                mapDialogCoords = Pair(lat, lng)
+                                mapDialogTitle = title
+                            }
+                        )
 
-                    Spacer(modifier = Modifier.height(20.dp))
+                        Spacer(modifier = Modifier.height(20.dp))
 
-                    // LISTA SEPARADA: CONTATOS QUE RECEBERÃO O MEU SOS
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column {
-                            Text(
-                                text = "Contatos que Receberão meu SOS (${senderContacts.size})",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White
-                            )
-                            Text(
-                                text = "Receberão SMS a cada 1m com sua localização e ligação viva-voz",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = Color(0xFFFFD54F),
-                                fontSize = 11.sp
+                        // LISTA SEPARADA: CONTATOS QUE RECEBERÃO O MEU SOS
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text(
+                                    text = "Contatos que Receberão meu SOS (${senderContacts.size})",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                                Text(
+                                    text = "Receberão SMS a cada 10s com sua localização e ligação viva-voz",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = Color(0xFFFFD54F),
+                                    fontSize = 11.sp
                             )
                         }
 
@@ -460,10 +511,11 @@ fun MainScreen(viewModel: MainViewModel) {
                         }
                     }
 
-                } else {
-                    // ==========================================
-                    // ABA 2: RECEBER (RECEPTOR NÃO PERTURBE)
-                    // ==========================================
+                    }
+                    1 -> {
+                        // ==========================================
+                        // ABA 1: RECEBER (RECEPTOR NÃO PERTURBE)
+                        // ==========================================
 
                     // Switch Mestre do Modo Receptor com status de segundo plano
                     Card(
@@ -1076,13 +1128,39 @@ fun MainScreen(viewModel: MainViewModel) {
                                     }
                                     context.startActivity(webIntent)
                                 }
+                            }, onViewInAppMap = { lat, lng, title ->
+                                mapDialogCoords = Pair(lat, lng)
+                                mapDialogTitle = title
                             })
                             Spacer(modifier = Modifier.height(10.dp))
                         }
                     }
                 }
+                2 -> {
+                    // ==========================================
+                    // ABA 2: DEMONSTRAÇÃO EXCLUSIVA E MAPA
+                    // ==========================================
+                    DemonstrationTab(
+                        viewModel = viewModel,
+                        onOpenMapDialog = { lat, lng, title ->
+                            mapDialogCoords = Pair(lat, lng)
+                            mapDialogTitle = title
+                        }
+                    )
+                }
             }
         }
+    }
+}
+
+    // Diálogo de Mapa Embutido no App
+    if (mapDialogCoords != null) {
+        EmbeddedMapDialog(
+            latitude = mapDialogCoords!!.first,
+            longitude = mapDialogCoords!!.second,
+            title = mapDialogTitle,
+            onDismiss = { mapDialogCoords = null }
+        )
     }
 
     // Diálogo de Orientação caso o Android tenha bloqueado o SMS
@@ -1411,6 +1489,7 @@ fun SosHeroSection(
     totalSmsSent: Int,
     secondsToNextSms: Int,
     lastMapsUrl: String?,
+    lastCoordinates: Pair<Double, Double>? = null,
     contactsCount: Int,
     hasGpsPermission: Boolean,
     hasSmsPermission: Boolean,
@@ -1419,7 +1498,8 @@ fun SosHeroSection(
     onOpenSettings: () -> Unit,
     onTriggerSos: () -> Unit,
     onCancelCountdown: () -> Unit,
-    onStopSos: () -> Unit
+    onStopSos: () -> Unit,
+    onViewInAppMap: ((Double, Double, String) -> Unit)? = null
 ) {
     val context = LocalContext.current
 
@@ -1626,20 +1706,42 @@ fun SosHeroSection(
                     }
                 }
 
-                if (!lastMapsUrl.isNullOrBlank()) {
+                if (lastCoordinates != null || !lastMapsUrl.isNullOrBlank()) {
                     Spacer(modifier = Modifier.height(12.dp))
-                    Button(
-                        onClick = {
-                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(lastMapsUrl))
-                            context.startActivity(intent)
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00C853)),
-                        shape = RoundedCornerShape(10.dp),
-                        modifier = Modifier.fillMaxWidth().height(48.dp)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Icon(Icons.Default.LocationOn, contentDescription = null, tint = Color.White)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Ver Minha Localização Atual no Mapa", fontWeight = FontWeight.Bold)
+                        if (lastCoordinates != null && onViewInAppMap != null) {
+                            Button(
+                                onClick = {
+                                    onViewInAppMap(lastCoordinates.first, lastCoordinates.second, "Minha Localização de SOS")
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00897B)),
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier.weight(1f).height(48.dp)
+                            ) {
+                                Icon(Icons.Default.Visibility, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Ver no App", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                            }
+                        }
+
+                        if (!lastMapsUrl.isNullOrBlank()) {
+                            Button(
+                                onClick = {
+                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(lastMapsUrl))
+                                    context.startActivity(intent)
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00C853)),
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier.weight(if (lastCoordinates != null && onViewInAppMap != null) 1.2f else 1f).height(48.dp)
+                            ) {
+                                Icon(Icons.Default.Map, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Google Maps", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                            }
+                        }
                     }
                 }
 
@@ -1728,7 +1830,7 @@ fun SosHeroSection(
                         Text(
                             text = "• Ao tocar no botão SOS, inicia uma contagem regressiva de 10 segundos.\n" +
                                     "• Se você não cancelar durante os 10s, o envio real é iniciado automaticamente.\n" +
-                                    "• Captura sua localização GPS em tempo real e envia SMS para $contactsCount contato(s) a cada 1 minuto continuamente.\n" +
+                                    "• Captura sua localização GPS em tempo real e envia SMS para $contactsCount contato(s) a cada 10 segundos continuamente.\n" +
                                     "• Inicia chamada telefônica em viva-voz para o 1º contato da lista de envio.\n" +
                                     "• A transmissão contínua segue até você tocar em PARAR.",
                             style = MaterialTheme.typography.bodySmall,
@@ -2016,7 +2118,8 @@ fun ContactItemCard(
 @Composable
 fun AlertItemCard(
     alert: EmergencyAlert,
-    onOpenMap: (String) -> Unit
+    onOpenMap: (String) -> Unit,
+    onViewInAppMap: ((Double, Double, String) -> Unit)? = null
 ) {
     val context = LocalContext.current
     val dateFormat = remember { SimpleDateFormat("dd/MM/yyyy HH:mm:ss", Locale.getDefault()) }
@@ -2131,19 +2234,41 @@ fun AlertItemCard(
 
                         Spacer(modifier = Modifier.height(8.dp))
 
-                        Button(
-                            onClick = {
-                                com.emergencycall.bypass.util.LocationParser.openGoogleMaps(context, effectiveMapsUrl)
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00C853)),
-                            shape = RoundedCornerShape(8.dp),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(46.dp)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Icon(Icons.Default.Map, contentDescription = null, modifier = Modifier.size(18.dp), tint = Color.White)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("ABRIR NO GOOGLE MAPS", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color.White)
+                            if (coords != null && onViewInAppMap != null) {
+                                OutlinedButton(
+                                    onClick = {
+                                        onViewInAppMap(coords.first, coords.second, "Alerta de ${alert.senderName}")
+                                    },
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(46.dp),
+                                    shape = RoundedCornerShape(8.dp),
+                                    border = androidx.compose.foundation.BorderStroke(1.5.dp, Color(0xFF00E676))
+                                ) {
+                                    Icon(Icons.Default.Visibility, contentDescription = null, tint = Color(0xFF00E676), modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("VER NO APP", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = Color.White)
+                                }
+                            }
+
+                            Button(
+                                onClick = {
+                                    com.emergencycall.bypass.util.LocationParser.openGoogleMaps(context, effectiveMapsUrl)
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00C853)),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier
+                                    .weight(if (coords != null && onViewInAppMap != null) 1.2f else 1f)
+                                    .height(46.dp)
+                            ) {
+                                Icon(Icons.Default.Map, contentDescription = null, modifier = Modifier.size(16.dp), tint = Color.White)
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("GOOGLE MAPS", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = Color.White)
+                            }
                         }
                     }
                 }
