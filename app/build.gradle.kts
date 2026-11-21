@@ -23,9 +23,10 @@ android {
         create("release") {
             if (keystoreFile.exists()) {
                 storeFile = keystoreFile
-                storePassword = System.getenv("KEYSTORE_PASSWORD") ?: "Emergency123!"
+                // Senhas somente via variáveis de ambiente (sem fallback no código)
+                storePassword = System.getenv("KEYSTORE_PASSWORD")
                 keyAlias = System.getenv("KEY_ALIAS") ?: "emergencykey"
-                keyPassword = System.getenv("KEY_PASSWORD") ?: "Emergency123!"
+                keyPassword = System.getenv("KEY_PASSWORD")
                 enableV1Signing = true
                 enableV2Signing = true
                 enableV3Signing = true
