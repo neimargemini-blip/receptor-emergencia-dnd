@@ -96,12 +96,14 @@ class ContactStorage(private val context: Context) {
         }
         if (phoneMatch != null) return phoneMatch
 
-        // 2. Match por nome do contato
+        // 2. Match por nome: igualdade exata ou nome inteiro como palavra dentro do texto
         val trimmed = incomingNumberOrName.trim()
         return activeContacts.firstOrNull { contact ->
-            contact.name.equals(trimmed, ignoreCase = true) ||
-            trimmed.contains(contact.name, ignoreCase = true) ||
-            contact.name.contains(trimmed, ignoreCase = true)
+            val name = contact.name.trim()
+            if (name.isEmpty()) return@firstOrNull false
+            name.equals(trimmed, ignoreCase = true) ||
+                Regex("(?<![\\p{L}\\p{N}])${Regex.escape(name)}(?![\\p{L}\\p{N}])", RegexOption.IGNORE_CASE)
+                    .containsMatchIn(trimmed)
         }
     }
 
