@@ -30,7 +30,6 @@ data class PermissionsStatus(
     val hasLocationPermissions: Boolean = false,
     val hasCallPhonePermission: Boolean = false,
     val hasReadContactsPermission: Boolean = false,
-    val hasNotificationListenerAccess: Boolean = false,
     val isIgnoringBattery: Boolean = false,
     val hasNotification: Boolean = false
 )
@@ -87,6 +86,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _selectedRingtoneUri = MutableStateFlow(preferencesManager.selectedRingtoneUri)
     val selectedRingtoneUri: StateFlow<String?> = _selectedRingtoneUri.asStateFlow()
 
+    // Auto-Reinício se for fechado / removido dos recentes
+    private val _isAutoRestartEnabled = MutableStateFlow(preferencesManager.isAutoRestartEnabled)
+    val isAutoRestartEnabled: StateFlow<Boolean> = _isAutoRestartEnabled.asStateFlow()
+
     init {
         refreshPermissions()
         // Garante que o serviço de segundo plano esteja rodando se o monitoramento estiver ativo
@@ -105,7 +108,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             hasLocationPermissions = PermissionHelper.hasLocationPermissions(app),
             hasCallPhonePermission = PermissionHelper.hasCallPhonePermission(app),
             hasReadContactsPermission = PermissionHelper.hasReadContactsPermission(app),
-            hasNotificationListenerAccess = PermissionHelper.hasNotificationListenerAccess(app),
             isIgnoringBattery = PermissionHelper.isIgnoringBatteryOptimizations(app),
             hasNotification = PermissionHelper.hasNotificationPermission(app)
         )
@@ -266,33 +268,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /**
-     * Simula uma chamada recebida do WhatsApp após 5 segundos.
-     */
-    fun simulateWhatsAppIn5s(contact: EmergencyContact? = null) {
-        val callerName = contact?.name ?: "Contato WhatsApp Teste"
-        val callerNumber = contact?.phoneNumber ?: "(11) 98765-4321"
-
-        _simulationType.value = "Chamada WhatsApp"
-        simulationJob?.cancel()
-        simulationJob = viewModelScope.launch {
-            for (i in 5 downTo 1) {
-                _simulationCountdown.value = i
-                delay(1000L)
-            }
-            _simulationCountdown.value = null
-
-            EmergencyCallRingerService.start(
-                context = getApplication(),
-                callerName = callerName,
-                callerNumber = callerNumber,
-                triggerType = "WHATSAPP_CALL",
-                messageBody = "Chamada recebida via WhatsApp",
-                mapsUrl = null
-            )
-        }
-    }
-
-    /**
      * Simula recebimento de SMS de emergência com mapa após 5 segundos.
      */
     fun simulateSmsIn5s(contact: EmergencyContact? = null) {
@@ -334,7 +309,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun simulateEmergencyCall(contact: EmergencyContact) = simulateCallIn5s(contact)
     fun simulateEmergencySms(contact: EmergencyContact) = simulateSmsIn5s(contact)
-    fun simulateEmergencyWhatsApp(contact: EmergencyContact) = simulateWhatsAppIn5s(contact)
 
     fun stopTestRinger() {
         EmergencyCallRingerService.stop(getApplication())
@@ -344,5 +318,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         simulationJob?.cancel()
         simulationJob = null
         _simulationCountdown.value = null
+    }
+
+    fun toggleAutoRestart(enabled: Boolean) {
+        preferencesManager.isAutoRestartEnabled = enabled
+        _isAutoRestartEnabled.value = enabled
+    }
+
+    /**
+     * Simula o fechamento do serviço e testa se o watchdog de auto-reinício o acorda de volta em 1.5s
+     */
+    fun testAutoRestartWatchdog() {
+        viewModelScope.launch {
+            val app = getApplication<Application>()
+            // Envia broadcast diretamente para o AutoRestartReceiver para comprovar o despertar
+            val intent = android.content.Intent(app, com.emergencycall.bypass.receiver.AutoRestartReceiver::class.java).apply {
+                action = com.emergencycall.bypass.receiver.AutoRestartReceiver.ACTION_AUTO_RESTART
+            }
+            app.sendBroadcast(intent)
+        }
     }
 }

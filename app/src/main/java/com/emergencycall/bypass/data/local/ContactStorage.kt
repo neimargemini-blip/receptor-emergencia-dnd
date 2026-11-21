@@ -96,7 +96,7 @@ class ContactStorage(private val context: Context) {
         }
         if (phoneMatch != null) return phoneMatch
 
-        // 2. Match por nome do contato (usado em chamadas do WhatsApp)
+        // 2. Match por nome do contato
         val trimmed = incomingNumberOrName.trim()
         return activeContacts.firstOrNull { contact ->
             contact.name.equals(trimmed, ignoreCase = true) ||

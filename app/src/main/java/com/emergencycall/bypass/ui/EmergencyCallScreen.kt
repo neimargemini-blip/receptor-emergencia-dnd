@@ -52,8 +52,6 @@ fun EmergencyCallScreen(
 
     val (badgeText, badgeIcon, headerColor) = when (triggerType) {
         "SMS" -> Triple("ALERTA DE SMS", Icons.Default.Sms, Color(0xFFFF9800))
-        "WHATSAPP_CALL" -> Triple("CHAMADA WHATSAPP", Icons.Default.PhoneInTalk, Color(0xFF25D366))
-        "WHATSAPP_MSG" -> Triple("WHATSAPP SOS", Icons.AutoMirrored.Filled.Chat, Color(0xFF25D366))
         else -> Triple("CHAMADA TELEFÔNICA", Icons.Default.Call, RedPrimary)
     }
 
@@ -347,35 +345,11 @@ fun EmergencyCallScreen(
                                 onSilence()
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1976D2)),
-                            modifier = Modifier.weight(1f).height(50.dp)
+                            modifier = Modifier.fillMaxWidth().height(50.dp)
                         ) {
                             Icon(Icons.Default.Call, contentDescription = null, modifier = Modifier.size(20.dp))
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("LIGAR", fontWeight = FontWeight.Bold)
-                        }
-                    }
-
-                    if (triggerType.startsWith("WHATSAPP")) {
-                        Button(
-                            onClick = {
-                                val cleanNum = callerNumber.replace(Regex("[^0-9]"), "")
-                                val waUri = if (cleanNum.isNotBlank()) {
-                                    Uri.parse("https://api.whatsapp.com/send?phone=$cleanNum")
-                                } else {
-                                    Uri.parse("https://api.whatsapp.com")
-                                }
-                                val waIntent = Intent(Intent.ACTION_VIEW, waUri).apply {
-                                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                                }
-                                context.startActivity(waIntent)
-                                onSilence()
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF25D366)),
-                            modifier = Modifier.weight(1f).height(50.dp)
-                        ) {
-                            Icon(Icons.AutoMirrored.Filled.Send, contentDescription = null, modifier = Modifier.size(20.dp))
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("WHATSAPP", fontWeight = FontWeight.Bold)
+                            Text("LIGAR DE VOLTA", fontWeight = FontWeight.Bold)
                         }
                     }
                 }

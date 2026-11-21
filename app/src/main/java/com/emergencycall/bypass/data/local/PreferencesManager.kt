@@ -15,6 +15,7 @@ class PreferencesManager(context: Context) {
         private const val KEY_VIBRATION_ENABLED = "vibration_enabled"
         private const val KEY_RINGTONE_URI = "selected_ringtone_uri"
         private const val KEY_RINGTONE_TITLE = "selected_ringtone_title"
+        private const val KEY_AUTO_RESTART_ENABLED = "auto_restart_enabled"
 
         @Volatile
         private var instance: PreferencesManager? = null
@@ -52,4 +53,9 @@ class PreferencesManager(context: Context) {
     var selectedRingtoneTitle: String?
         get() = prefs.getString(KEY_RINGTONE_TITLE, "Alarme Crítico de Emergência (Sirene)")
         set(value) = prefs.edit().putString(KEY_RINGTONE_TITLE, value).apply()
+
+    // Reiniciar automaticamente o serviço de monitoramento caso o app seja fechado ou removido dos recentes
+    var isAutoRestartEnabled: Boolean
+        get() = prefs.getBoolean(KEY_AUTO_RESTART_ENABLED, true)
+        set(value) = prefs.edit().putBoolean(KEY_AUTO_RESTART_ENABLED, value).apply()
 }

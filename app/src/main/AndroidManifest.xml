@@ -76,16 +76,21 @@
             </intent-filter>
         </receiver>
 
-        <!-- NotificationListenerService para Detectar Chamadas Recebidas do WhatsApp -->
-        <service
-            android:name=".service.WhatsAppCallListenerService"
-            android:label="Identificador de Chamadas WhatsApp"
-            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
+        <!-- BroadcastReceiver de Auto-Reinício e Watchdog (mantém app vivo se for fechado) -->
+        <receiver
+            android:name=".receiver.AutoRestartReceiver"
             android:exported="true">
             <intent-filter>
-                <action android:name="android.service.notification.NotificationListenerService" />
+                <action android:name="com.emergencycall.bypass.action.AUTO_RESTART" />
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.USER_PRESENT" />
+                <action android:name="android.intent.action.ACTION_POWER_CONNECTED" />
+                <action android:name="android.intent.action.ACTION_POWER_DISCONNECTED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON" />
             </intent-filter>
-        </service>
+        </receiver>
 
         <!-- BroadcastReceiver para Reinício do Aparelho (Auto-start do Monitor) -->
         <receiver

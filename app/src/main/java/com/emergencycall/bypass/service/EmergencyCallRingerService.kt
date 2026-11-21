@@ -558,7 +558,6 @@ class EmergencyCallRingerService : Service(), TextToSpeech.OnInitListener {
 
         val title = when (triggerType) {
             "SMS" -> "ALERTA SMS: $callerName"
-            "WHATSAPP_CALL" -> "CHAMADA WHATSAPP: $callerName"
             else -> "CHAMADA TELEFÔNICA: $callerName"
         }
 

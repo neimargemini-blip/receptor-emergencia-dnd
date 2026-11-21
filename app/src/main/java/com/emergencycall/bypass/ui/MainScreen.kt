@@ -39,10 +39,12 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import android.widget.Toast
 import com.emergencycall.bypass.data.model.AlertSource
 import com.emergencycall.bypass.data.model.EmergencyAlert
 import com.emergencycall.bypass.data.model.EmergencyContact
 import com.emergencycall.bypass.ui.theme.*
+import com.emergencycall.bypass.util.AutoStartHelper
 import com.emergencycall.bypass.util.ContactPickerHelper
 import com.emergencycall.bypass.util.PermissionHelper
 import java.text.SimpleDateFormat
@@ -82,11 +84,15 @@ fun MainScreen(viewModel: MainViewModel) {
     val simulationCountdown by viewModel.simulationCountdown.collectAsState()
     val simulationType by viewModel.simulationType.collectAsState()
 
+    // Auto-Reinício se for fechado
+    val isAutoRestartEnabled by viewModel.isAutoRestartEnabled.collectAsState()
+
     // 0 = ENVIAR SOS (Destaque Principal) | 1 = RECEBER (Receptor Não Perturbe)
     var selectedTab by remember { mutableIntStateOf(0) }
     var showAddDialog by remember { mutableStateOf(false) }
     var dialogTarget by remember { mutableStateOf(ContactDialogTarget.RECEIVER) }
     var showSmsHelpDialog by remember { mutableStateOf(false) }
+    var showBackgroundSettingsDialog by remember { mutableStateOf(false) }
     var newName by remember { mutableStateOf("") }
     var newPhone by remember { mutableStateOf("") }
 
@@ -170,6 +176,15 @@ fun MainScreen(viewModel: MainViewModel) {
                         )
                         Spacer(modifier = Modifier.width(10.dp))
                         Text("Central de Emergência SOS", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                    }
+                },
+                actions = {
+                    IconButton(onClick = { showBackgroundSettingsDialog = true }) {
+                        Icon(
+                            Icons.Default.Settings,
+                            contentDescription = "Configurações de Auto-Início e Segundo Plano",
+                            tint = Color.White
+                        )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -503,6 +518,146 @@ fun MainScreen(viewModel: MainViewModel) {
                     Spacer(modifier = Modifier.height(14.dp))
 
                     // ========================================================
+                    // PAINEL DE AUTO-INÍCIO E PROTEÇÃO 24/7 (ANTI-ENCERRAMENTO)
+                    // ========================================================
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF142018)),
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .border(1.dp, Color(0xFF2E7D32).copy(alpha = 0.6f), RoundedCornerShape(14.dp))
+                    ) {
+                        Column(modifier = Modifier.padding(14.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                                    Icon(
+                                        Icons.Default.PowerSettingsNew,
+                                        contentDescription = null,
+                                        tint = Color(0xFF66BB6A),
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Column {
+                                        Text(
+                                            text = "Auto-Reinício se Fechado",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.White
+                                        )
+                                        Text(
+                                            text = "Reinicia sozinho se você fechar o app nos recentes",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = Color(0xFFA5D6A7),
+                                            fontSize = 11.sp
+                                        )
+                                    }
+                                }
+                                Switch(
+                                    checked = isAutoRestartEnabled,
+                                    onCheckedChange = { viewModel.toggleAutoRestart(it) }
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            // Status da Bateria (Irrestrito)
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(Color(0xFF0D1610))
+                                    .padding(horizontal = 10.dp, vertical = 8.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                                    Icon(
+                                        if (permissionsStatus.isIgnoringBattery) Icons.Default.CheckCircle else Icons.Default.Warning,
+                                        contentDescription = null,
+                                        tint = if (permissionsStatus.isIgnoringBattery) Color(0xFF66BB6A) else Color(0xFFFFB74D),
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Column {
+                                        Text(
+                                            text = if (permissionsStatus.isIgnoringBattery) "Bateria: Sem Restrições (Irrestrito)" else "Bateria: Otimizada (Pode suspender)",
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = if (permissionsStatus.isIgnoringBattery) Color(0xFF81C784) else Color(0xFFFFCC80)
+                                        )
+                                        Text(
+                                            text = if (permissionsStatus.isIgnoringBattery) "Protegido contra fechamento pelo Android" else "O Android pode matar o app em segundo plano",
+                                            fontSize = 10.sp,
+                                            color = Color.LightGray
+                                        )
+                                    }
+                                }
+
+                                if (!permissionsStatus.isIgnoringBattery) {
+                                    Button(
+                                        onClick = {
+                                            try {
+                                                context.startActivity(PermissionHelper.getBatteryOptimizationSettingsIntent(context))
+                                            } catch (e: Exception) {
+                                                try {
+                                                    context.startActivity(PermissionHelper.getAppSettingsIntent(context))
+                                                } catch (_: Exception) {}
+                                            }
+                                        },
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE65100)),
+                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                        shape = RoundedCornerShape(8.dp)
+                                    ) {
+                                        Text("Liberar", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            // Botões de Ação
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                OutlinedButton(
+                                    onClick = {
+                                        AutoStartHelper.openAutoStartSettings(context)
+                                    },
+                                    modifier = Modifier.weight(1f),
+                                    shape = RoundedCornerShape(8.dp),
+                                    contentPadding = PaddingValues(vertical = 8.dp),
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF66BB6A))
+                                ) {
+                                    Icon(Icons.Default.Settings, contentDescription = null, modifier = Modifier.size(16.dp), tint = Color(0xFF81C784))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Autostart (${AutoStartHelper.deviceBrand})", fontSize = 11.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                                }
+
+                                Button(
+                                    onClick = {
+                                        showBackgroundSettingsDialog = true
+                                    },
+                                    modifier = Modifier.weight(1f),
+                                    shape = RoundedCornerShape(8.dp),
+                                    contentPadding = PaddingValues(vertical = 8.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32))
+                                ) {
+                                    Icon(Icons.Default.HelpOutline, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Como Configurar", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    // ========================================================
                     // PAINEL DE TESTES, SIMULAÇÃO E ESCOLHA DE TOQUE DO ALARME
                     // ========================================================
                     Card(
@@ -644,13 +799,13 @@ fun MainScreen(viewModel: MainViewModel) {
                                 }
 
                                 OutlinedButton(
-                                    onClick = { viewModel.simulateWhatsAppIn5s(receiverContacts.firstOrNull()) },
+                                    onClick = { viewModel.simulateSmsIn5s(receiverContacts.firstOrNull()) },
                                     modifier = Modifier.weight(1f),
                                     contentPadding = PaddingValues(horizontal = 6.dp, vertical = 8.dp)
                                 ) {
-                                    Icon(Icons.Default.PhoneInTalk, contentDescription = null, tint = Color(0xFF25D366), modifier = Modifier.size(14.dp))
+                                    Icon(Icons.Default.Sms, contentDescription = null, tint = Color(0xFFFF9800), modifier = Modifier.size(14.dp))
                                     Spacer(modifier = Modifier.width(4.dp))
-                                    Text("Simular WhatsApp (em 5s)", fontSize = 11.sp)
+                                    Text("Simular SMS (em 5s)", fontSize = 11.sp)
                                 }
                             }
 
@@ -729,24 +884,7 @@ fun MainScreen(viewModel: MainViewModel) {
 
                     Spacer(modifier = Modifier.height(6.dp))
 
-                    // 4. Identificar Chamadas Recebidas do WhatsApp
-                    PermissionRow(
-                        title = "Chamadas do WhatsApp no Não Perturbe",
-                        description = "Permite identificar chamadas do WhatsApp e falar o nome do contato",
-                        isGranted = permissionsStatus.hasNotificationListenerAccess,
-                        actionLabel = "Autorizar WhatsApp",
-                        onAction = {
-                            context.startActivity(PermissionHelper.getNotificationListenerSettingsIntent())
-                        },
-                        secondaryActionLabel = "Ajustes",
-                        onSecondaryAction = {
-                            context.startActivity(PermissionHelper.getNotificationListenerSettingsIntent())
-                        }
-                    )
-
-                    Spacer(modifier = Modifier.height(6.dp))
-
-                    // 5. Otimização de Bateria (Sem restrições para não fechar)
+                    // 4. Otimização de Bateria (Sem restrições para não fechar)
                     PermissionRow(
                         title = "Desativar Otimização de Bateria",
                         description = "Evita que o Android suspenda o aplicativo em segundo plano",
@@ -875,8 +1013,7 @@ fun MainScreen(viewModel: MainViewModel) {
                                 onToggle = { viewModel.toggleReceiverContact(contact.id) },
                                 onDelete = { viewModel.removeReceiverContact(contact.id) },
                                 onTestCall = { viewModel.simulateEmergencyCall(contact) },
-                                onTestSms = { viewModel.simulateEmergencySms(contact) },
-                                onTestWhatsApp = { viewModel.simulateEmergencyWhatsApp(contact) }
+                                onTestSms = { viewModel.simulateEmergencySms(contact) }
                             )
                             Spacer(modifier = Modifier.height(10.dp))
                         }
@@ -984,6 +1121,195 @@ fun MainScreen(viewModel: MainViewModel) {
             dismissButton = {
                 TextButton(onClick = { showSmsHelpDialog = false }) {
                     Text("Entendi")
+                }
+            }
+        )
+    }
+
+    // Diálogo de Orientação e Configurações de Auto-Início e Segundo Plano
+    if (showBackgroundSettingsDialog) {
+        AlertDialog(
+            onDismissRequest = { showBackgroundSettingsDialog = false },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.PowerSettingsNew, contentDescription = null, tint = Color(0xFF66BB6A))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Auto-Início e Segundo Plano", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                }
+            },
+            text = {
+                Column(
+                    modifier = Modifier
+                        .verticalScroll(rememberScrollState())
+                        .padding(vertical = 4.dp)
+                ) {
+                    // Switch de Ativação
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(Color(0xFF1E281E))
+                            .padding(12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Auto-Reinício se Fechado", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = Color.White)
+                            Text("O serviço acorda sozinho se o app for fechado nos recentes.", fontSize = 11.sp, color = Color(0xFFA5D6A7))
+                        }
+                        Switch(
+                            checked = isAutoRestartEnabled,
+                            onCheckedChange = { viewModel.toggleAutoRestart(it) }
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    Text(
+                        text = "Para que seu celular NUNCA encerre o aplicativo e ele funcione 24 horas por dia, siga estes 3 passos simples:",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.LightGray
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // Passo 1: Cadeado nos Recentes
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF212121)),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Lock, contentDescription = null, tint = Color(0xFFFFD54F), modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Passo 1: Travar com Cadeado nos Recentes", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color.White)
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "Abra a tela de multitarefa (aplicativos recentes), segure o dedo sobre a janela deste aplicativo e toque no ícone do Cadeado 🔒 para travá-lo. Isso impede que o botão 'Limpar Tudo' feche o app.",
+                                fontSize = 11.sp,
+                                color = Color(0xFFE0E0E0)
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Passo 2: Início Automático (Autostart do Fabricante)
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF212121)),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Settings, contentDescription = null, tint = Color(0xFF42A5F5), modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Passo 2: Início Automático (${AutoStartHelper.deviceBrand})", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color.White)
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "Em celulares ${AutoStartHelper.deviceBrand}, ative a permissão 'Início Automático' para que o monitor inicie sempre que o celular ligar ou for reiniciado.",
+                                fontSize = 11.sp,
+                                color = Color(0xFFE0E0E0)
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Button(
+                                onClick = {
+                                    AutoStartHelper.openAutoStartSettings(context)
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1976D2)),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.fillMaxWidth(),
+                                contentPadding = PaddingValues(vertical = 6.dp)
+                            ) {
+                                Text("Abrir Início Automático (${AutoStartHelper.deviceBrand})", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Passo 3: Bateria Irrestrita
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF212121)),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    if (permissionsStatus.isIgnoringBattery) Icons.Default.CheckCircle else Icons.Default.Warning,
+                                    contentDescription = null,
+                                    tint = if (permissionsStatus.isIgnoringBattery) Color(0xFF66BB6A) else Color(0xFFFFB74D),
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "Passo 3: Bateria Sem Restrições",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 13.sp,
+                                    color = Color.White
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = if (permissionsStatus.isIgnoringBattery)
+                                    "✅ Seu celular já está configurado como 'Sem Restrições'. O Android não suspenderá este app!"
+                                else
+                                    "Otimização de bateria ativa! O Android pode suspender o app com a tela apagada. Toque abaixo e escolha 'Sem restrições'.",
+                                fontSize = 11.sp,
+                                color = if (permissionsStatus.isIgnoringBattery) Color(0xFF81C784) else Color(0xFFFFCC80)
+                            )
+                            if (!permissionsStatus.isIgnoringBattery) {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Button(
+                                    onClick = {
+                                        try {
+                                            context.startActivity(PermissionHelper.getBatteryOptimizationSettingsIntent(context))
+                                        } catch (e: Exception) {
+                                            try {
+                                                context.startActivity(PermissionHelper.getAppSettingsIntent(context))
+                                            } catch (_: Exception) {}
+                                        }
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE65100)),
+                                    shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier.fillMaxWidth(),
+                                    contentPadding = PaddingValues(vertical = 6.dp)
+                                ) {
+                                    Text("Configurar Bateria sem Restrições", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    // Teste do Watchdog de Auto-Reinício
+                    OutlinedButton(
+                        onClick = {
+                            viewModel.testAutoRestartWatchdog()
+                            Toast.makeText(context, "Watchdog testado! O serviço foi mantido vivo.", Toast.LENGTH_SHORT).show()
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(vertical = 8.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF66BB6A))
+                    ) {
+                        Icon(Icons.Default.Refresh, contentDescription = null, tint = Color(0xFF66BB6A), modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Testar Auto-Reinício Agora", fontSize = 12.sp, color = Color(0xFFA5D6A7), fontWeight = FontWeight.Bold)
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = { showBackgroundSettingsDialog = false },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32))
+                ) {
+                    Text("Concluir")
                 }
             }
         )
@@ -1588,8 +1914,7 @@ fun ContactItemCard(
     onToggle: () -> Unit,
     onDelete: () -> Unit,
     onTestCall: () -> Unit,
-    onTestSms: () -> Unit,
-    onTestWhatsApp: () -> Unit
+    onTestSms: () -> Unit
 ) {
     Card(
         colors = CardDefaults.cardColors(containerColor = CardBackground),
@@ -1682,16 +2007,6 @@ fun ContactItemCard(
                     Icon(Icons.Default.LocationOn, contentDescription = null, tint = Color(0xFF00E676), modifier = Modifier.size(14.dp))
                     Spacer(modifier = Modifier.width(4.dp))
                     Text("SMS Mapa", fontSize = 11.sp)
-                }
-
-                OutlinedButton(
-                    onClick = onTestWhatsApp,
-                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp),
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Icon(Icons.Default.PhoneInTalk, contentDescription = null, tint = Color(0xFF25D366), modifier = Modifier.size(14.dp))
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("WhatsApp", fontSize = 11.sp)
                 }
             }
         }

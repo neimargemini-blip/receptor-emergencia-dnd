@@ -29,7 +29,6 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         viewModel.refreshPermissions()
-        com.emergencycall.bypass.service.WhatsAppCallListenerService.rebindIfNecessary(this)
     }
 
     private fun requestRequiredPermissions() {

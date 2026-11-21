@@ -1,5 +1,6 @@
 package com.emergencycall.bypass.service
 
+import android.app.AlarmManager
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -10,10 +11,12 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.os.Build
 import android.os.IBinder
+import android.os.SystemClock
 import android.telephony.TelephonyManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.emergencycall.bypass.data.local.PreferencesManager
+import com.emergencycall.bypass.receiver.AutoRestartReceiver
 import com.emergencycall.bypass.receiver.IncomingCallReceiver
 import com.emergencycall.bypass.ui.MainActivity
 
@@ -55,14 +58,15 @@ class EmergencyMonitorService : Service() {
     }
 
     private var internalCallReceiver: IncomingCallReceiver? = null
+    private var isExplicitlyStopped = false
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onCreate() {
         super.onCreate()
+        isExplicitlyStopped = false
         createNotificationChannel()
         registerInternalCallReceiver()
-        WhatsAppCallListenerService.rebindIfNecessary(this)
     }
 
     private fun registerInternalCallReceiver() {
@@ -94,22 +98,81 @@ class EmergencyMonitorService : Service() {
         }
     }
 
+    /**
+     * Chamado pelo Android quando o usuário desliza o app para fora da lista de aplicativos recentes (fecha o app).
+     */
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        super.onTaskRemoved(rootIntent)
+        Log.w(TAG, "onTaskRemoved: Aplicativo fechado na lista de recentes. Agendando reinício imediato...")
+        scheduleWatchdogRestart()
+    }
+
     override fun onDestroy() {
         unregisterInternalCallReceiver()
+        if (!isExplicitlyStopped) {
+            Log.w(TAG, "onDestroy inesperado no serviço de monitoramento. Acionando watchdog de recuperação...")
+            scheduleWatchdogRestart()
+        }
         super.onDestroy()
+    }
+
+    /**
+     * Agenda o reinício do serviço através do AlarmManager com PendingIntent de broadcast.
+     * Funciona mesmo com o app fechado e em modo Doze/Standby.
+     */
+    private fun scheduleWatchdogRestart() {
+        val prefs = PreferencesManager.getInstance(this)
+        if (!prefs.isMonitoringActive || !prefs.isAutoRestartEnabled) {
+            Log.d(TAG, "Watchdog cancelado: monitoramento ou auto-reinício desativado nas preferências")
+            return
+        }
+
+        try {
+            val restartIntent = Intent(applicationContext, AutoRestartReceiver::class.java).apply {
+                action = AutoRestartReceiver.ACTION_AUTO_RESTART
+            }
+            val pendingIntent = PendingIntent.getBroadcast(
+                applicationContext,
+                1999,
+                restartIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+
+            val alarmManager = getSystemService(Context.ALARM_SERVICE) as AlarmManager
+            val triggerAt = SystemClock.elapsedRealtime() + 1200 // Dispara em 1.2 segundos
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                alarmManager.setExactAndAllowWhileIdle(
+                    AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                    triggerAt,
+                    pendingIntent
+                )
+            } else {
+                alarmManager.set(
+                    AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                    triggerAt,
+                    pendingIntent
+                )
+            }
+            Log.i(TAG, "Watchdog agendado com sucesso para acordar e reiniciar o serviço em 1.2s")
+        } catch (e: Exception) {
+            Log.e(TAG, "Falha ao agendar auto-reinício no AlarmManager", e)
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val prefs = PreferencesManager.getInstance(this)
 
         if (intent?.action == ACTION_STOP_MONITOR || !prefs.isMonitoringActive) {
-            Log.d(TAG, "Parando serviço persistente de monitoramento")
+            Log.d(TAG, "Parando serviço persistente de monitoramento por solicitação explícita")
+            isExplicitlyStopped = true
             unregisterInternalCallReceiver()
             stopForeground(STOP_FOREGROUND_REMOVE)
             stopSelf()
             return START_NOT_STICKY
         }
 
+        isExplicitlyStopped = false
         Log.d(TAG, "Iniciando serviço persistente para manter app ativo 24/7 em segundo plano")
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {

@@ -123,23 +123,6 @@ object PermissionHelper {
     }
 
     /**
-     * Verifica se o serviço de ouvinte de chamadas (para WhatsApp) está autorizado no Android.
-     */
-    fun hasNotificationListenerAccess(context: Context): Boolean {
-        val enabledPackages = NotificationManagerCompat.getEnabledListenerPackages(context)
-        return enabledPackages.contains(context.packageName)
-    }
-
-    /**
-     * Retorna a Intent para abrir as configurações de Acesso a Notificações (Notification Listener).
-     */
-    fun getNotificationListenerSettingsIntent(): Intent {
-        return Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK
-        }
-    }
-
-    /**
      * Verifica se o app está isento das restrições de bateria em segundo plano (Doze Mode).
      */
     fun isIgnoringBatteryOptimizations(context: Context): Boolean {
