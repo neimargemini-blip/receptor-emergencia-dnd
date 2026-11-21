@@ -13,6 +13,7 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -33,6 +34,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -1395,6 +1398,11 @@ fun MainScreen(viewModel: MainViewModel) {
 
     // Diálogo de Adicionar Contato (Agenda ou Digitação)
     if (showAddDialog) {
+        // Telefone precisa ter ao menos 8 dígitos e o nome não pode ser vazio
+        val phoneDigits = newPhone.count { it.isDigit() }
+        val isPhoneInvalid = newPhone.isNotBlank() && phoneDigits < 8
+        val canSave = newName.isNotBlank() && phoneDigits >= 8
+
         val targetTitle = if (dialogTarget == ContactDialogTarget.SENDER) {
             "Novo Contato para Enviar SOS"
         } else {
@@ -1438,6 +1446,7 @@ fun MainScreen(viewModel: MainViewModel) {
                         onValueChange = { newName = it },
                         label = { Text("Nome do Contato (ex: Mãe)") },
                         singleLine = true,
+                        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words),
                         modifier = Modifier.fillMaxWidth()
                     )
                     Spacer(modifier = Modifier.height(8.dp))
@@ -1446,14 +1455,24 @@ fun MainScreen(viewModel: MainViewModel) {
                         onValueChange = { newPhone = it },
                         label = { Text("Telefone com DDD (ex: 11988887777)") },
                         singleLine = true,
+                        isError = isPhoneInvalid,
+                        supportingText = {
+                            Text(
+                                text = if (isPhoneInvalid) "Informe DDD + número (mínimo 8 dígitos)"
+                                       else "Use o mesmo número que enviará o SMS",
+                                fontSize = 11.sp
+                            )
+                        },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
             },
             confirmButton = {
                 Button(
+                    enabled = canSave,
                     onClick = {
-                        if (newName.isNotBlank() && newPhone.isNotBlank()) {
+                        if (canSave) {
                             if (dialogTarget == ContactDialogTarget.SENDER) {
                                 viewModel.addSenderContact(newName, newPhone)
                             } else {
