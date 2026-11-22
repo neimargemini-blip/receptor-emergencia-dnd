@@ -1702,9 +1702,9 @@ fun SosHeroSection(
             )
 
             Text(
-                text = if (isSosRunning) "Localização sendo enviada continuamente"
+                text = if (isSosRunning) "Sirene crítica, flash piscando e localização enviada a cada 10s"
                        else if (sosCountdown != null) "Toque no botão para ABORTAR se foi por engano!"
-                       else "Contagem de 10s para segurança contra toques acidentais",
+                       else "Aciona sirene crítica, pisca flash e envia localização a cada 10s",
                 fontSize = 12.sp,
                 color = if (sosCountdown != null) Color(0xFFFFD54F) else TextSecondary,
                 modifier = Modifier.padding(top = 2.dp),
@@ -1885,6 +1885,32 @@ fun SosHeroSection(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.VolumeUp, contentDescription = null, tint = Color(0xFFFF5252), modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Alarme Crítico:", color = TextSecondary, fontSize = 13.sp)
+                            }
+                            Text("TOCANDO EM LOOP", fontWeight = FontWeight.Bold, color = Color(0xFFFF5252), fontSize = 12.sp)
+                        }
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.FlashOn, contentDescription = null, tint = Color(0xFFFFD54F), modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Flash da Câmera:", color = TextSecondary, fontSize = 13.sp)
+                            }
+                            Text("PISCANDO", fontWeight = FontWeight.Bold, color = Color(0xFFFFD54F), fontSize = 12.sp)
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween

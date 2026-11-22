@@ -27,6 +27,10 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
     <uses-permission android:name="android.permission.MANAGE_OWN_CALLS" />
+    <uses-permission android:name="android.permission.CAMERA" />
+
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.flash" android:required="false" />
 
     <application
         android:name=".EmergencyApplication"
@@ -124,14 +128,14 @@
                 android:value="Tocar som de emergência a 50% de volume com bypass de Não Perturbe e falar nome do contato até atender" />
         </service>
 
-        <!-- Foreground Service de Disparo Contínuo de SOS (Emissor a cada 1 minuto) -->
+        <!-- Foreground Service de Disparo Contínuo de SOS (Sirene, Flash e Localização a cada 10s) -->
         <service
             android:name=".service.SosEmitterService"
             android:exported="false"
-            android:foregroundServiceType="location|specialUse">
+            android:foregroundServiceType="location|mediaPlayback|specialUse">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="Envio contínuo e periódico de localização via SMS a cada 1 minuto e ligação com viva-voz em caso de SOS de emergência" />
+                android:value="Envio contínuo e periódico de localização via SMS a cada 10 segundos, alerta sonoro crítico e sinal luminoso com flash até ser cancelado" />
         </service>
 
     </application>

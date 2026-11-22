@@ -221,7 +221,7 @@ fun DemonstrationTab(
 
                 Spacer(modifier = Modifier.height(10.dp))
                 Text(
-                    text = "Após o SOS ser acionado, o app envia nativamente a localização a cada 10 segundos sem interrupção para todos os contatos.",
+                    text = "Após o SOS ser acionado, o app ativa a sirene de alerta crítico em loop, pisca o flash estroboscópico da câmera e envia a localização nativa a cada 10 segundos sem interrupção para todos os contatos até ser parado.",
                     fontSize = 12.sp,
                     color = Color.LightGray
                 )

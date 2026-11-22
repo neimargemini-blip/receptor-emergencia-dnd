@@ -8,11 +8,21 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ServiceInfo
+import android.hardware.camera2.CameraCharacteristics
+import android.hardware.camera2.CameraManager
+import android.media.AudioAttributes
 import android.media.AudioManager
+import android.media.MediaPlayer
+import android.media.Ringtone
+import android.media.RingtoneManager
 import android.net.Uri
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.emergencycall.bypass.EmergencyApplication
@@ -34,6 +44,20 @@ class SosEmitterService : Service() {
     private var sosJob: Job? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private var audioManager: AudioManager? = null
+    private var vibrator: Vibrator? = null
+
+    // Lanterna / Flash Strobe
+    private var cameraManager: CameraManager? = null
+    private var flashCameraId: String? = null
+    private var flashJob: Job? = null
+
+    // Alarme Sonoro Crítico (Sirene em Loop)
+    private var mediaPlayer: MediaPlayer? = null
+    private var fallbackRingtone: Ringtone? = null
+    private var soundWatchdogJob: Job? = null
+    private var previousAlarmVolume: Int? = null
+    private var previousRingerMode: Int? = null
+    private var previousDndFilter: Int? = null
 
     companion object {
         private const val TAG = "SosEmitterService"
@@ -89,12 +113,21 @@ class SosEmitterService : Service() {
         super.onCreate()
         audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
 
+        vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val vm = getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
+            vm.defaultVibrator
+        } else {
+            @Suppress("DEPRECATION")
+            getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+        }
+
         val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
         wakeLock = powerManager.newWakeLock(
             PowerManager.PARTIAL_WAKE_LOCK,
             "EmergencyCallBypass:SosWakeLock"
         )
 
+        initFlash()
         createNotificationChannel()
     }
 
@@ -120,29 +153,40 @@ class SosEmitterService : Service() {
         }
 
         try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                val fgsType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                    android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION or android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
-                } else {
-                    android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
-                }
-                startForeground(NOTIFICATION_ID, createNotification("SOS ATIVADO", "Enviando localização para contatos VIP..."), fgsType)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                val fgsType = ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION or
+                              ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK or
+                              ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+                startForeground(NOTIFICATION_ID, createNotification("🚨 SOS ATIVADO", "Sirene e Flash ativos. Enviando localização a cada 10s..."), fgsType)
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                val fgsType = ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION or
+                              ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
+                startForeground(NOTIFICATION_ID, createNotification("🚨 SOS ATIVADO", "Sirene e Flash ativos. Enviando localização a cada 10s..."), fgsType)
             } else {
-                startForeground(NOTIFICATION_ID, createNotification("SOS ATIVADO", "Enviando localização para contatos VIP..."))
+                startForeground(NOTIFICATION_ID, createNotification("🚨 SOS ATIVADO", "Sirene e Flash ativos. Enviando localização a cada 10s..."))
             }
         } catch (e: Throwable) {
             Log.e(TAG, "Erro ao iniciar startForeground no SosEmitter", e)
             try {
-                startForeground(NOTIFICATION_ID, createNotification("SOS ATIVADO", "Enviando localização para contatos VIP..."))
+                startForeground(NOTIFICATION_ID, createNotification("🚨 SOS ATIVADO", "Sirene e Flash ativos. Enviando localização a cada 10s..."))
             } catch (e2: Throwable) {
                 Log.e(TAG, "Falha no fallback de startForeground do SOS", e2)
             }
         }
 
-        // 1. Tenta realizar a chamada com viva-voz para o primeiro contato ativo
+        // 1. Inicia som de alerta crítico (sirene) até ser parado
+        startCriticalAlarmSound()
+
+        // 2. Inicia piscar do flash (lanterna estroboscópica) até ser parado
+        startFlashStrobe()
+
+        // 3. Inicia vibração contínua em padrão de emergência
+        startSosVibration()
+
+        // 4. Tenta realizar a chamada com viva-voz para o primeiro contato ativo
         makePhoneCallWithSpeakerphone()
 
-        // 2. Inicia loop de envio de localização nativa via SMS a cada 10 segundos
+        // 5. Inicia loop de envio de localização nativa via SMS a cada 10 segundos
         sosJob = serviceScope.launch {
             while (isActive && _isSosRunning.value) {
                 // Dispara o envio imediato da localização atual
@@ -157,6 +201,233 @@ class SosEmitterService : Service() {
             }
         }
     }
+
+    // ==================== CONTROLE DO FLASH (LANTERNA ESTROBOSCÓPICA) ====================
+
+    private fun initFlash() {
+        try {
+            cameraManager = getSystemService(Context.CAMERA_SERVICE) as? CameraManager
+            cameraManager?.let { cm ->
+                for (id in cm.cameraIdList) {
+                    val characteristics = cm.getCameraCharacteristics(id)
+                    val hasFlash = characteristics.get(CameraCharacteristics.FLASH_INFO_AVAILABLE) == true
+                    val facing = characteristics.get(CameraCharacteristics.LENS_FACING)
+                    if (hasFlash && facing == CameraCharacteristics.LENS_FACING_BACK) {
+                        flashCameraId = id
+                        break
+                    } else if (hasFlash && flashCameraId == null) {
+                        flashCameraId = id
+                    }
+                }
+            }
+            Log.d(TAG, "Flash inicializado com câmera ID: $flashCameraId")
+        } catch (e: Throwable) {
+            Log.e(TAG, "Erro ao inicializar CameraManager para flash", e)
+        }
+    }
+
+    private fun startFlashStrobe() {
+        if (cameraManager == null || flashCameraId == null) {
+            initFlash()
+        }
+        val targetId = flashCameraId
+        if (targetId == null) {
+            Log.w(TAG, "Nenhuma câmera com flash disponível no dispositivo")
+            return
+        }
+
+        flashJob?.cancel()
+        flashJob = serviceScope.launch(Dispatchers.Default) {
+            var torchState = false
+            while (isActive && _isSosRunning.value) {
+                try {
+                    torchState = !torchState
+                    cameraManager?.setTorchMode(targetId, torchState)
+                } catch (e: Throwable) {
+                    Log.w(TAG, "Erro ao alternar flash: ${e.message}")
+                }
+                delay(200L) // Pisca rápido a cada 200ms
+            }
+            // Ao sair do loop, garante flash desligado
+            try {
+                cameraManager?.setTorchMode(targetId, false)
+            } catch (_: Throwable) {}
+        }
+    }
+
+    private fun stopFlashStrobe() {
+        flashJob?.cancel()
+        flashJob = null
+        try {
+            flashCameraId?.let { id ->
+                cameraManager?.setTorchMode(id, false)
+            }
+        } catch (e: Throwable) {
+            Log.w(TAG, "Erro ao desligar flash no encerramento: ${e.message}")
+        }
+    }
+
+    // ==================== CONTROLE DO ALARME SONORO CRÍTICO ====================
+
+    private fun startCriticalAlarmSound() {
+        // 1. Tira do Não Perturbe se tiver permissão
+        if (PermissionHelper.hasDndAccess(this) && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            try {
+                val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                previousDndFilter = notificationManager.currentInterruptionFilter
+                notificationManager.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_ALL)
+            } catch (e: Throwable) {
+                Log.e(TAG, "Erro ao desativar DND para SOS", e)
+            }
+        }
+
+        // 2. Coloca em RINGER_MODE_NORMAL e volume no MÁXIMO
+        try {
+            audioManager?.let { am ->
+                previousRingerMode = am.ringerMode
+                am.ringerMode = AudioManager.RINGER_MODE_NORMAL
+
+                previousAlarmVolume = am.getStreamVolume(AudioManager.STREAM_ALARM)
+                val maxAlarm = am.getStreamMaxVolume(AudioManager.STREAM_ALARM)
+                am.setStreamVolume(AudioManager.STREAM_ALARM, maxAlarm, 0)
+            }
+        } catch (e: Throwable) {
+            Log.e(TAG, "Erro ao ajustar volume do alarme para SOS", e)
+        }
+
+        // 3. Toca som de alerta crítico em loop contínuo
+        try {
+            val audioAttributes = AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_ALARM)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                .build()
+
+            try {
+                mediaPlayer?.release()
+                mediaPlayer = MediaPlayer().apply {
+                    setAudioAttributes(audioAttributes)
+                    val afd = resources.openRawResourceFd(com.emergencycall.bypass.R.raw.critical_alarm)
+                    if (afd != null) {
+                        setDataSource(afd.fileDescriptor, afd.startOffset, afd.length)
+                        afd.close()
+                    } else {
+                        val rawUri = Uri.parse("android.resource://$packageName/${com.emergencycall.bypass.R.raw.critical_alarm}")
+                        setDataSource(applicationContext, rawUri)
+                    }
+                    isLooping = true
+                    prepare()
+                    start()
+                }
+                Log.d(TAG, "Alarme crítico SOS (R.raw.critical_alarm) iniciado em loop com sucesso")
+            } catch (e: Throwable) {
+                Log.e(TAG, "Falha ao iniciar MediaPlayer com R.raw.critical_alarm, usando RingtoneManager fallback", e)
+                val defaultUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+                    ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
+                fallbackRingtone = RingtoneManager.getRingtone(applicationContext, defaultUri)?.apply {
+                    this.audioAttributes = audioAttributes
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) isLooping = true
+                    play()
+                }
+            }
+
+            // Loop de verificação de garantia: se o som parar enquanto SOS estiver ativo, religa imediatamente
+            soundWatchdogJob?.cancel()
+            soundWatchdogJob = serviceScope.launch {
+                while (isActive && _isSosRunning.value) {
+                    delay(2000L)
+                    if (_isSosRunning.value) {
+                        try {
+                            if (mediaPlayer != null && mediaPlayer?.isPlaying == false) {
+                                mediaPlayer?.start()
+                            } else if (fallbackRingtone != null && fallbackRingtone?.isPlaying == false) {
+                                fallbackRingtone?.play()
+                            }
+                        } catch (e: Throwable) {
+                            Log.w(TAG, "Watchdog som SOS: ${e.message}")
+                        }
+                    }
+                }
+            }
+        } catch (e: Throwable) {
+            Log.e(TAG, "Erro fatal ao iniciar som crítico", e)
+        }
+    }
+
+    private fun stopCriticalAlarmSound() {
+        soundWatchdogJob?.cancel()
+        soundWatchdogJob = null
+
+        try {
+            if (mediaPlayer?.isPlaying == true) {
+                mediaPlayer?.stop()
+            }
+            mediaPlayer?.release()
+            mediaPlayer = null
+        } catch (e: Throwable) {
+            Log.e(TAG, "Erro ao liberar MediaPlayer", e)
+        }
+
+        try {
+            if (fallbackRingtone?.isPlaying == true) {
+                fallbackRingtone?.stop()
+            }
+            fallbackRingtone = null
+        } catch (e: Throwable) {
+            Log.e(TAG, "Erro ao parar Ringtone", e)
+        }
+
+        // Restaura volume anterior do alarme
+        try {
+            audioManager?.let { am ->
+                previousAlarmVolume?.let { vol ->
+                    am.setStreamVolume(AudioManager.STREAM_ALARM, vol, 0)
+                }
+                previousRingerMode?.let { mode ->
+                    am.ringerMode = mode
+                }
+            }
+        } catch (e: Throwable) {
+            Log.e(TAG, "Erro ao restaurar volume do alarme", e)
+        }
+
+        // Restaura DND se havia sido alterado
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && previousDndFilter != null) {
+            try {
+                val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                previousDndFilter?.let { filter ->
+                    notificationManager.setInterruptionFilter(filter)
+                }
+            } catch (e: Throwable) {
+                Log.e(TAG, "Erro ao restaurar filtro DND", e)
+            }
+        }
+    }
+
+    // ==================== VIBRAÇÃO DE SOS ====================
+
+    private fun startSosVibration() {
+        try {
+            val pattern = EmergencyApplication.EMERGENCY_VIBRATION_PATTERN
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                vibrator?.vibrate(VibrationEffect.createWaveform(pattern, 0))
+            } else {
+                @Suppress("DEPRECATION")
+                vibrator?.vibrate(pattern, 0)
+            }
+        } catch (e: Throwable) {
+            Log.e(TAG, "Erro ao iniciar vibração SOS", e)
+        }
+    }
+
+    private fun stopSosVibration() {
+        try {
+            vibrator?.cancel()
+        } catch (e: Throwable) {
+            Log.e(TAG, "Erro ao parar vibração SOS", e)
+        }
+    }
+
+    // ==================== ENVIO DE SMS PERIÓDICO COM LOCALIZAÇÃO ====================
 
     private suspend fun sendLocationSmsToAllContacts() {
         val contacts = ContactStorage.getInstance(this).getSenderContacts().filter { it.isEnabled }
@@ -193,7 +464,7 @@ class SosEmitterService : Service() {
             NOTIFICATION_ID,
             createNotification(
                 "🚨 SOS ATIVO - Localização Enviada",
-                "SMS enviado para $sentThisRound contatos. Próximo envio em 10 segundos."
+                "Sirene e Flash ativos. SMS enviado para $sentThisRound contatos. Próximo envio em 10s."
             )
         )
     }
@@ -237,6 +508,11 @@ class SosEmitterService : Service() {
         _sosStartedAt.value = null
         sosJob?.cancel()
         sosJob = null
+
+        // Para Flash, Sirene e Vibração imediatamente
+        stopFlashStrobe()
+        stopCriticalAlarmSound()
+        stopSosVibration()
 
         try {
             audioManager?.isSpeakerphoneOn = false
@@ -283,7 +559,7 @@ class SosEmitterService : Service() {
             .setCategory(NotificationCompat.CATEGORY_ALARM)
             .setOngoing(true)
             .setContentIntent(pOpenApp)
-            .addAction(android.R.drawable.ic_menu_close_clear_cancel, "CANCELAR SOS", pStop)
+            .addAction(android.R.drawable.ic_menu_close_clear_cancel, "PARAR SOS AGORA", pStop)
             .build()
     }
 
