@@ -235,27 +235,6 @@ fun MainScreen(viewModel: MainViewModel) {
                     titleContentColor = Color.White
                 )
             )
-        },
-        floatingActionButton = {
-            if (selectedTab == 0 || selectedTab == 1) {
-                ExtendedFloatingActionButton(
-                    onClick = {
-                        newName = ""
-                        newPhone = ""
-                        dialogTarget = if (selectedTab == 0) ContactDialogTarget.SENDER else ContactDialogTarget.RECEIVER
-                        showAddDialog = true
-                    },
-                    containerColor = if (selectedTab == 0) Color(0xFFD50000) else Color(0xFF1565C0),
-                    contentColor = Color.White,
-                    icon = { Icon(Icons.Default.PersonAdd, contentDescription = null) },
-                    text = {
-                        Text(
-                            text = if (selectedTab == 0) "+ Contato de SOS" else "+ Contato VIP",
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                )
-            }
         }
     ) { padding ->
         Column(
