@@ -42,11 +42,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     // 1. Contatos para RECEBER (Autorizados a furar Não Perturbe)
     val receiverContacts: StateFlow<List<EmergencyContact>> = contactStorage.receiverContactsFlow
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // 2. Contatos para ENVIAR SOS (Recebem meu SMS a cada 10s com GPS e ligação viva-voz)
     val senderContacts: StateFlow<List<EmergencyContact>> = contactStorage.senderContactsFlow
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val alerts: StateFlow<List<EmergencyAlert>> = alertStorage.alertsFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())

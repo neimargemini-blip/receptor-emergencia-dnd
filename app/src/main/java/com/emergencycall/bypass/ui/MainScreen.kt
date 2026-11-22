@@ -6,6 +6,7 @@ import android.content.Intent
 import android.media.RingtoneManager
 import android.net.Uri
 import android.os.Build
+import android.provider.ContactsContract
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -133,15 +134,34 @@ fun MainScreen(viewModel: MainViewModel) {
         contract = ActivityResultContracts.RequestMultiplePermissions()
     ) { viewModel.refreshPermissions() }
 
-    // Seletor de Contatos da Agenda do Aparelho
+    val contactsPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        viewModel.refreshPermissions()
+        if (isGranted) {
+            Toast.makeText(context, "Permissão de contatos concedida!", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    // Seletor de Contatos da Agenda do Aparelho (Phone.CONTENT_URI para máxima compatibilidade)
     val contactPickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickContact()
-    ) { contactUri ->
-        contactUri?.let { uri ->
-            val info = ContactPickerHelper.extractContactInfo(context, uri)
-            if (info != null) {
-                newName = info.first
-                newPhone = info.second
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val contactUri = result.data?.data
+            if (contactUri != null) {
+                val info = ContactPickerHelper.extractContactInfo(context, contactUri)
+                if (info != null) {
+                    newName = info.first
+                    newPhone = info.second
+                    if (info.second.isNotBlank()) {
+                        Toast.makeText(context, "Contato carregado: ${info.first}", Toast.LENGTH_SHORT).show()
+                    } else {
+                        Toast.makeText(context, "Nome carregado! Digite o número de telefone.", Toast.LENGTH_SHORT).show()
+                    }
+                } else {
+                    Toast.makeText(context, "Não foi possível carregar os dados do contato.", Toast.LENGTH_SHORT).show()
+                }
             }
         }
     }
@@ -457,6 +477,8 @@ fun MainScreen(viewModel: MainViewModel) {
 
                         Button(
                             onClick = {
+                                newName = ""
+                                newPhone = ""
                                 dialogTarget = ContactDialogTarget.SENDER
                                 showAddDialog = true
                             },
@@ -501,6 +523,21 @@ fun MainScreen(viewModel: MainViewModel) {
                                     color = TextSecondary,
                                     textAlign = TextAlign.Center
                                 )
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Button(
+                                    onClick = {
+                                        newName = ""
+                                        newPhone = ""
+                                        dialogTarget = ContactDialogTarget.SENDER
+                                        showAddDialog = true
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD50000)),
+                                    shape = RoundedCornerShape(8.dp)
+                                ) {
+                                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Cadastrar Contato para SOS", fontWeight = FontWeight.Bold)
+                                }
                             }
                         }
                     } else {
@@ -1012,6 +1049,8 @@ fun MainScreen(viewModel: MainViewModel) {
 
                         Button(
                             onClick = {
+                                newName = ""
+                                newPhone = ""
                                 dialogTarget = ContactDialogTarget.RECEIVER
                                 showAddDialog = true
                             },
@@ -1057,6 +1096,21 @@ fun MainScreen(viewModel: MainViewModel) {
                                     color = TextSecondary,
                                     textAlign = TextAlign.Center
                                 )
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Button(
+                                    onClick = {
+                                        newName = ""
+                                        newPhone = ""
+                                        dialogTarget = ContactDialogTarget.RECEIVER
+                                        showAddDialog = true
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1565C0)),
+                                    shape = RoundedCornerShape(8.dp)
+                                ) {
+                                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Cadastrar Contato VIP", fontWeight = FontWeight.Bold)
+                                }
                             }
                         }
                     } else {
@@ -1396,10 +1450,8 @@ fun MainScreen(viewModel: MainViewModel) {
 
     // Diálogo de Adicionar Contato (Agenda ou Digitação)
     if (showAddDialog) {
-        // Telefone precisa ter ao menos 8 dígitos e o nome não pode ser vazio
         val phoneDigits = newPhone.count { it.isDigit() }
-        val isPhoneInvalid = newPhone.isNotBlank() && phoneDigits < 8
-        val canSave = newName.isNotBlank() && phoneDigits >= 8
+        val isPhoneInvalid = newPhone.isNotBlank() && phoneDigits < 3
 
         val targetTitle = if (dialogTarget == ContactDialogTarget.SENDER) {
             "Novo Contato para Enviar SOS"
@@ -1414,7 +1466,11 @@ fun MainScreen(viewModel: MainViewModel) {
         }
 
         AlertDialog(
-            onDismissRequest = { showAddDialog = false },
+            onDismissRequest = {
+                newName = ""
+                newPhone = ""
+                showAddDialog = false
+            },
             title = { Text(targetTitle) },
             text = {
                 Column {
@@ -1427,7 +1483,19 @@ fun MainScreen(viewModel: MainViewModel) {
                     Spacer(modifier = Modifier.height(12.dp))
 
                     Button(
-                        onClick = { contactPickerLauncher.launch(null) },
+                        onClick = {
+                            try {
+                                val pickIntent = Intent(Intent.ACTION_PICK, ContactsContract.CommonDataKinds.Phone.CONTENT_URI)
+                                contactPickerLauncher.launch(pickIntent)
+                            } catch (e: Exception) {
+                                try {
+                                    val genericIntent = Intent(Intent.ACTION_PICK, ContactsContract.Contacts.CONTENT_URI)
+                                    contactPickerLauncher.launch(genericIntent)
+                                } catch (e2: Exception) {
+                                    Toast.makeText(context, "Não foi possível abrir a agenda de contatos.", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        },
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1976D2)),
                         shape = RoundedCornerShape(8.dp),
                         modifier = Modifier.fillMaxWidth()
@@ -1451,13 +1519,13 @@ fun MainScreen(viewModel: MainViewModel) {
                     OutlinedTextField(
                         value = newPhone,
                         onValueChange = { newPhone = it },
-                        label = { Text("Telefone com DDD (ex: 11988887777)") },
+                        label = { Text("Telefone ou Número (ex: 11988887777)") },
                         singleLine = true,
                         isError = isPhoneInvalid,
                         supportingText = {
                             Text(
-                                text = if (isPhoneInvalid) "Informe DDD + número (mínimo 8 dígitos)"
-                                       else "Use o mesmo número que enviará o SMS",
+                                text = if (isPhoneInvalid) "Digite um número com ao menos 3 dígitos"
+                                       else "Ex: DDD + número, ou 190 / 192 / 193",
                                 fontSize = 11.sp
                             )
                         },
@@ -1468,18 +1536,33 @@ fun MainScreen(viewModel: MainViewModel) {
             },
             confirmButton = {
                 Button(
-                    enabled = canSave,
                     onClick = {
-                        if (canSave) {
-                            if (dialogTarget == ContactDialogTarget.SENDER) {
-                                viewModel.addSenderContact(newName, newPhone)
-                            } else {
-                                viewModel.addReceiverContact(newName, newPhone)
-                            }
-                            newName = ""
-                            newPhone = ""
-                            showAddDialog = false
+                        val trimmedPhone = newPhone.trim()
+                        val digitsCount = trimmedPhone.count { it.isDigit() }
+
+                        if (trimmedPhone.isBlank()) {
+                            Toast.makeText(context, "Por favor, digite ou selecione o telefone.", Toast.LENGTH_SHORT).show()
+                            return@Button
                         }
+                        if (digitsCount < 3) {
+                            Toast.makeText(context, "O número deve ter pelo menos 3 dígitos.", Toast.LENGTH_SHORT).show()
+                            return@Button
+                        }
+
+                        val trimmedName = newName.trim()
+                        val finalName = if (trimmedName.isNotBlank()) trimmedName else trimmedPhone
+
+                        if (dialogTarget == ContactDialogTarget.SENDER) {
+                            viewModel.addSenderContact(finalName, trimmedPhone)
+                            Toast.makeText(context, "Contato de SOS cadastrado com sucesso!", Toast.LENGTH_SHORT).show()
+                        } else {
+                            viewModel.addReceiverContact(finalName, trimmedPhone)
+                            Toast.makeText(context, "Contato VIP cadastrado com sucesso!", Toast.LENGTH_SHORT).show()
+                        }
+
+                        newName = ""
+                        newPhone = ""
+                        showAddDialog = false
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = RedPrimary)
                 ) {
@@ -1487,7 +1570,11 @@ fun MainScreen(viewModel: MainViewModel) {
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showAddDialog = false }) {
+                TextButton(onClick = {
+                    newName = ""
+                    newPhone = ""
+                    showAddDialog = false
+                }) {
                     Text("Cancelar")
                 }
             }
