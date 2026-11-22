@@ -207,6 +207,21 @@ fun MainScreen(viewModel: MainViewModel) {
                     }
                 },
                 actions = {
+                    IconButton(
+                        onClick = {
+                            newName = ""
+                            newPhone = ""
+                            dialogTarget = if (selectedTab == 0) ContactDialogTarget.SENDER else ContactDialogTarget.RECEIVER
+                            showAddDialog = true
+                        }
+                    ) {
+                        Icon(
+                            Icons.Default.PersonAdd,
+                            contentDescription = "Adicionar Novo Contato",
+                            tint = Color.White
+                        )
+                    }
+
                     IconButton(onClick = { showBackgroundSettingsDialog = true }) {
                         Icon(
                             Icons.Default.Settings,
@@ -220,6 +235,27 @@ fun MainScreen(viewModel: MainViewModel) {
                     titleContentColor = Color.White
                 )
             )
+        },
+        floatingActionButton = {
+            if (selectedTab == 0 || selectedTab == 1) {
+                ExtendedFloatingActionButton(
+                    onClick = {
+                        newName = ""
+                        newPhone = ""
+                        dialogTarget = if (selectedTab == 0) ContactDialogTarget.SENDER else ContactDialogTarget.RECEIVER
+                        showAddDialog = true
+                    },
+                    containerColor = if (selectedTab == 0) Color(0xFFD50000) else Color(0xFF1565C0),
+                    contentColor = Color.White,
+                    icon = { Icon(Icons.Default.PersonAdd, contentDescription = null) },
+                    text = {
+                        Text(
+                            text = if (selectedTab == 0) "+ Contato de SOS" else "+ Contato VIP",
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                )
+            }
         }
     ) { padding ->
         Column(
@@ -449,6 +485,12 @@ fun MainScreen(viewModel: MainViewModel) {
                             onViewInAppMap = { lat, lng, title ->
                                 mapDialogCoords = Pair(lat, lng)
                                 mapDialogTitle = title
+                            },
+                            onAddContact = {
+                                newName = ""
+                                newPhone = ""
+                                dialogTarget = ContactDialogTarget.SENDER
+                                showAddDialog = true
                             }
                         )
 
@@ -607,7 +649,109 @@ fun MainScreen(viewModel: MainViewModel) {
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(14.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // LISTA SEPARADA: CONTATOS AUTORIZADOS A FURAR MEU NÃO PERTURBE (NO TOPO)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text(
+                                text = "Contatos VIP para Receber (${receiverContacts.size})",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+                            Text(
+                                text = "Quem estiver nesta lista poderá furar seu Não Perturbe",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color(0xFF80D8FF),
+                                fontSize = 11.sp
+                            )
+                        }
+
+                        Button(
+                            onClick = {
+                                newName = ""
+                                newPhone = ""
+                                dialogTarget = ContactDialogTarget.RECEIVER
+                                showAddDialog = true
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1565C0)),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                        ) {
+                            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Adicionar", fontSize = 13.sp)
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    if (receiverContacts.isEmpty()) {
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = CardBackground),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(24.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Icon(
+                                    Icons.Default.PersonAdd,
+                                    contentDescription = null,
+                                    tint = TextSecondary,
+                                    modifier = Modifier.size(44.dp)
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = "Nenhum contato autorizado a receber",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = Color.White
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = "Adicione pessoas para que possam furar seu modo Não Perturbe por chamada ou SMS.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = TextSecondary,
+                                    textAlign = TextAlign.Center
+                                )
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Button(
+                                    onClick = {
+                                        newName = ""
+                                        newPhone = ""
+                                        dialogTarget = ContactDialogTarget.RECEIVER
+                                        showAddDialog = true
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1565C0)),
+                                    shape = RoundedCornerShape(8.dp)
+                                ) {
+                                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Cadastrar Contato VIP", fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                    } else {
+                        receiverContacts.forEach { contact ->
+                            ContactItemCard(
+                                contact = contact,
+                                onToggle = { viewModel.toggleReceiverContact(contact.id) },
+                                onDelete = { viewModel.removeReceiverContact(contact.id) },
+                                onTestCall = { viewModel.simulateEmergencyCall(contact) },
+                                onTestSms = { viewModel.simulateEmergencySms(contact) }
+                            )
+                            Spacer(modifier = Modifier.height(10.dp))
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
 
                     // ========================================================
                     // PAINEL DE AUTO-INÍCIO E PROTEÇÃO 24/7 (ANTI-ENCERRAMENTO)
@@ -1021,108 +1165,6 @@ fun MainScreen(viewModel: MainViewModel) {
                                 color = Color.LightGray,
                                 fontSize = 11.sp
                             )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(18.dp))
-
-                    // LISTA SEPARADA: CONTATOS AUTORIZADOS A FURAR MEU NÃO PERTURBE
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column {
-                            Text(
-                                text = "Contatos VIP para Receber (${receiverContacts.size})",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White
-                            )
-                            Text(
-                                text = "Quem estiver nesta lista poderá furar seu Não Perturbe",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = Color(0xFF80D8FF),
-                                fontSize = 11.sp
-                            )
-                        }
-
-                        Button(
-                            onClick = {
-                                newName = ""
-                                newPhone = ""
-                                dialogTarget = ContactDialogTarget.RECEIVER
-                                showAddDialog = true
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1565C0)),
-                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
-                        ) {
-                            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("Adicionar", fontSize = 13.sp)
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    if (receiverContacts.isEmpty()) {
-                        Card(
-                            colors = CardDefaults.cardColors(containerColor = CardBackground),
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(24.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                Icon(
-                                    Icons.Default.PersonAdd,
-                                    contentDescription = null,
-                                    tint = TextSecondary,
-                                    modifier = Modifier.size(44.dp)
-                                )
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Text(
-                                    text = "Nenhum contato autorizado a receber",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    color = Color.White
-                                )
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text(
-                                    text = "Adicione pessoas para que possam furar seu modo Não Perturbe por chamada ou SMS.",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = TextSecondary,
-                                    textAlign = TextAlign.Center
-                                )
-                                Spacer(modifier = Modifier.height(12.dp))
-                                Button(
-                                    onClick = {
-                                        newName = ""
-                                        newPhone = ""
-                                        dialogTarget = ContactDialogTarget.RECEIVER
-                                        showAddDialog = true
-                                    },
-                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1565C0)),
-                                    shape = RoundedCornerShape(8.dp)
-                                ) {
-                                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text("Cadastrar Contato VIP", fontWeight = FontWeight.Bold)
-                                }
-                            }
-                        }
-                    } else {
-                        receiverContacts.forEach { contact ->
-                            ContactItemCard(
-                                contact = contact,
-                                onToggle = { viewModel.toggleReceiverContact(contact.id) },
-                                onDelete = { viewModel.removeReceiverContact(contact.id) },
-                                onTestCall = { viewModel.simulateEmergencyCall(contact) },
-                                onTestSms = { viewModel.simulateEmergencySms(contact) }
-                            )
-                            Spacer(modifier = Modifier.height(10.dp))
                         }
                     }
 
@@ -1603,7 +1645,8 @@ fun SosHeroSection(
     onTriggerSos: () -> Unit,
     onCancelCountdown: () -> Unit,
     onStopSos: () -> Unit,
-    onViewInAppMap: ((Double, Double, String) -> Unit)? = null
+    onViewInAppMap: ((Double, Double, String) -> Unit)? = null,
+    onAddContact: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
 
@@ -1760,7 +1803,57 @@ fun SosHeroSection(
                 }
             }
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(18.dp))
+
+            // Cartão de Contatos de SOS com Botão de Inserção Imediato e Destacado
+            if (onAddContact != null) {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF221111)),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .border(1.dp, Color(0xFFD50000).copy(alpha = 0.6f), RoundedCornerShape(12.dp))
+                        .clickable { onAddContact() }
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                            Icon(Icons.Default.Contacts, contentDescription = null, tint = Color(0xFFFFD54F), modifier = Modifier.size(22.dp))
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column {
+                                Text(
+                                    text = "Contatos de SOS ($contactsCount cadastrados)",
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White,
+                                    fontSize = 13.sp
+                                )
+                                Text(
+                                    text = if (contactsCount > 0) "Receberão sua localização GPS a cada 10s" else "Toque aqui para inserir novos contatos",
+                                    fontSize = 11.sp,
+                                    color = if (contactsCount > 0) Color(0xFFA5D6A7) else Color(0xFFFF8A80)
+                                )
+                            }
+                        }
+
+                        Button(
+                            onClick = onAddContact,
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD50000)),
+                            shape = RoundedCornerShape(8.dp),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                        ) {
+                            Icon(Icons.Default.PersonAdd, contentDescription = null, modifier = Modifier.size(14.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Inserir", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(14.dp))
+            }
 
             // Se estiver em contagem regressiva de 10s, mostra botão bem visível de ABORTAR
             if (sosCountdown != null) {
