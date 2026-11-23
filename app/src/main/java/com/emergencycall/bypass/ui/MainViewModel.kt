@@ -199,31 +199,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     // ==================== DISPARO DE SOS COM CONTAGEM DE 10s ====================
 
     /**
-     * Inicia a contagem regressiva de 10 segundos antes de enviar o SOS.
-     * Se for interrompido antes do fim, o SOS não é enviado.
+     * Dispara o SOS imediatamente ao ser acionado: inicia a sirene crítica, pisca o flash,
+     * vibra e envia SMS periódico a cada 10s, só parando quando o usuário interromper.
      */
     fun triggerSosButtonClick() {
         if (isSosRunning.value) {
-            // Se já estiver transmitindo SOS, o clique encerra a transmissão
+            // Se já estiver transmitindo SOS, o clique encerra a transmissão imediatamente
             stopEmergencySos()
-            return
-        }
-
-        if (_sosCountdown.value != null) {
-            // Se a contagem regressiva estiver ativa, cancelar imediatamente
-            cancelSosCountdown()
-            return
-        }
-
-        // Inicia contagem regressiva de 10 segundos
-        sosCountdownJob?.cancel()
-        sosCountdownJob = viewModelScope.launch {
-            for (sec in 10 downTo 1) {
-                _sosCountdown.value = sec
-                delay(1000L)
-            }
-            _sosCountdown.value = null
-            // 10 segundos se passaram sem cancelamento -> Inicia o SOS real
+        } else {
+            // Aciona imediatamente o SOS sem espera
             startEmergencySos()
         }
     }

@@ -315,7 +315,7 @@ fun MainScreen(viewModel: MainViewModel) {
                                     color = if (selectedTab == 0) Color.White else Color.LightGray
                                 )
                                 Text(
-                                    text = if (isSosRunning) "🚨 10s ATIVO" else if (sosCountdown != null) "⏳ ${sosCountdown}s" else "A cada 10s",
+                                    text = if (isSosRunning) "🚨 SOS ATIVO" else "Sirene + Flash",
                                     fontSize = 9.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     color = if (selectedTab == 0) Color(0xFFFFEB3B) else Color.Gray
@@ -1924,21 +1924,19 @@ fun SosHeroSection(
         ) {
             Text(
                 text = if (isSosRunning) "🚨 SOS EM TRANSMISSÃO ATIVA"
-                       else if (sosCountdown != null) "⚠️ INICIANDO SOS EM ${sosCountdown}s"
                        else "DISPARADOR DE SOS",
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Black,
-                color = if (isSosRunning) Color.Red else if (sosCountdown != null) Color(0xFFFF9800) else Color.White,
+                color = if (isSosRunning) Color.Red else Color.White,
                 letterSpacing = 1.sp,
                 textAlign = TextAlign.Center
             )
 
             Text(
-                text = if (isSosRunning) "Sirene crítica, flash piscando e localização enviada a cada 10s"
-                       else if (sosCountdown != null) "Toque no botão para ABORTAR se foi por engano!"
-                       else "Aciona sirene crítica, pisca flash e envia localização a cada 10s",
+                text = if (isSosRunning) "Sirene crítica tocando, flash piscando e localização enviada a cada 10s"
+                       else "Ao acionar, dispara imediatamente sirene crítica, flash e envio de localização a cada 10s",
                 fontSize = 12.sp,
-                color = if (sosCountdown != null) Color(0xFFFFD54F) else TextSecondary,
+                color = if (isSosRunning) Color(0xFFFF8A80) else TextSecondary,
                 modifier = Modifier.padding(top = 2.dp),
                 textAlign = TextAlign.Center
             )
