@@ -609,5 +609,71 @@ fun DemonstrationTab(
                 }
             }
         }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // =========================================================================
+        // DEMONSTRAÇÃO 5: CENTRAL DE ATUALIZAÇÕES & REPOSITÓRIO GITHUB
+        // =========================================================================
+        Card(
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1728)),
+            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .border(1.dp, Color(0xFF9C27B0), RoundedCornerShape(16.dp))
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.CloudSync, contentDescription = null, tint = Color(0xFFCE93D8), modifier = Modifier.size(20.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "5. Central de Atualizações e Repositório",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 15.sp,
+                        color = Color.White
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = "Verifica automaticamente se há novas versões publicadas no repositório GitHub, exibe o changelog com sugestões e baixa o novo APK com 1 toque.",
+                    fontSize = 12.sp,
+                    color = Color.LightGray
+                )
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Button(
+                        onClick = {
+                            viewModel.checkForUpdates(silent = false)
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF7B1FA2)),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.weight(1f).height(48.dp)
+                    ) {
+                        Icon(Icons.Default.Sync, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Verificar Atualizações", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+
+                    OutlinedButton(
+                        onClick = {
+                            viewModel.openRepositoryReleasePage("https://github.com/neimargemini-blip/receptor-emergencia-dnd")
+                        },
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.weight(1f).height(48.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFBA68C8))
+                    ) {
+                        Icon(Icons.Default.OpenInBrowser, contentDescription = null, tint = Color(0xFFCE93D8), modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Abrir Repositório", fontSize = 11.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
     }
 }

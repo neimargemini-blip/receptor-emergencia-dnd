@@ -12,7 +12,9 @@ import com.emergencycall.bypass.data.model.EmergencyContact
 import com.emergencycall.bypass.service.EmergencyCallRingerService
 import com.emergencycall.bypass.service.EmergencyMonitorService
 import com.emergencycall.bypass.service.SosEmitterService
+import com.emergencycall.bypass.util.AppUpdateInfo
 import com.emergencycall.bypass.util.PermissionHelper
+import com.emergencycall.bypass.util.UpdateManager
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -89,12 +91,30 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _isAutoRestartEnabled = MutableStateFlow(preferencesManager.isAutoRestartEnabled)
     val isAutoRestartEnabled: StateFlow<Boolean> = _isAutoRestartEnabled.asStateFlow()
 
+    // ==================== ATUALIZAÇÕES DO REPOSITÓRIO GITHUB ====================
+    private val _updateInfo = MutableStateFlow<AppUpdateInfo?>(null)
+    val updateInfo: StateFlow<AppUpdateInfo?> = _updateInfo.asStateFlow()
+
+    private val _isCheckingUpdates = MutableStateFlow(false)
+    val isCheckingUpdates: StateFlow<Boolean> = _isCheckingUpdates.asStateFlow()
+
+    private val _updateDownloadProgress = MutableStateFlow<Int?>(null) // null = inativo, 0..100 = baixando
+    val updateDownloadProgress: StateFlow<Int?> = _updateDownloadProgress.asStateFlow()
+
+    private val _updateErrorMessage = MutableStateFlow<String?>(null)
+    val updateErrorMessage: StateFlow<String?> = _updateErrorMessage.asStateFlow()
+
+    private val _showUpdateDialog = MutableStateFlow(false)
+    val showUpdateDialog: StateFlow<Boolean> = _showUpdateDialog.asStateFlow()
+
     init {
         refreshPermissions()
         // Garante que o serviço de segundo plano esteja rodando se o monitoramento estiver ativo
         if (preferencesManager.isMonitoringActive) {
             EmergencyMonitorService.start(application)
         }
+        // Consulta em segundo plano se há atualizações no repositório GitHub
+        checkForUpdates(silent = true)
     }
 
     fun refreshPermissions() {
@@ -336,5 +356,60 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
             app.sendBroadcast(intent)
         }
+    }
+
+    // ==================== GESTÃO DE ATUALIZAÇÕES ====================
+
+    fun checkForUpdates(silent: Boolean = false) {
+        viewModelScope.launch {
+            _isCheckingUpdates.value = true
+            _updateErrorMessage.value = null
+            val info = UpdateManager.checkForUpdates(getApplication())
+            _isCheckingUpdates.value = false
+            _updateInfo.value = info
+
+            if (info != null) {
+                if (info.isUpdateAvailable) {
+                    _showUpdateDialog.value = true
+                } else if (!silent) {
+                    _showUpdateDialog.value = true
+                }
+            } else if (!silent) {
+                _updateErrorMessage.value = "Não foi possível verificar atualizações no momento. Verifique sua conexão."
+            }
+        }
+    }
+
+    fun openUpdateDialog() {
+        _showUpdateDialog.value = true
+    }
+
+    fun dismissUpdateDialog() {
+        _showUpdateDialog.value = false
+    }
+
+    fun startApkDownload(apkUrl: String) {
+        viewModelScope.launch {
+            _updateDownloadProgress.value = 0
+            _updateErrorMessage.value = null
+            UpdateManager.downloadAndInstallApk(
+                context = getApplication(),
+                apkUrl = apkUrl,
+                onProgress = { percent ->
+                    _updateDownloadProgress.value = percent
+                },
+                onSuccess = {
+                    _updateDownloadProgress.value = null
+                },
+                onError = { error ->
+                    _updateDownloadProgress.value = null
+                    _updateErrorMessage.value = error
+                }
+            )
+        }
+    }
+
+    fun openRepositoryReleasePage(url: String) {
+        UpdateManager.openInBrowser(getApplication(), url)
     }
 }

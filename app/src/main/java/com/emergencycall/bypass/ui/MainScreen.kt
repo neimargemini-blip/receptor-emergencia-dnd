@@ -92,6 +92,13 @@ fun MainScreen(viewModel: MainViewModel) {
     // Auto-Reinício se for fechado
     val isAutoRestartEnabled by viewModel.isAutoRestartEnabled.collectAsState()
 
+    // Atualizações do Repositório GitHub
+    val updateInfo by viewModel.updateInfo.collectAsState()
+    val isCheckingUpdates by viewModel.isCheckingUpdates.collectAsState()
+    val updateDownloadProgress by viewModel.updateDownloadProgress.collectAsState()
+    val updateErrorMessage by viewModel.updateErrorMessage.collectAsState()
+    val showUpdateDialog by viewModel.showUpdateDialog.collectAsState()
+
     // 0 = ENVIAR SOS | 1 = RECEBER | 2 = DEMONSTRAÇÃO
     var selectedTab by remember { mutableIntStateOf(0) }
     var showAddDialog by remember { mutableStateOf(false) }
@@ -207,6 +214,25 @@ fun MainScreen(viewModel: MainViewModel) {
                     }
                 },
                 actions = {
+                    // Botão de Atualizações do Repositório GitHub
+                    IconButton(onClick = { viewModel.checkForUpdates(silent = false) }) {
+                        BadgedBox(
+                            badge = {
+                                if (updateInfo?.isUpdateAvailable == true) {
+                                    Badge(containerColor = Color(0xFFFF9800)) {
+                                        Text("!", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 9.sp)
+                                    }
+                                }
+                            }
+                        ) {
+                            Icon(
+                                imageVector = if (isCheckingUpdates) Icons.Default.Sync else Icons.Default.CloudSync,
+                                contentDescription = "Verificar Atualizações do Repositório",
+                                tint = if (updateInfo?.isUpdateAvailable == true) Color(0xFFFFB74D) else Color.White
+                            )
+                        }
+                    }
+
                     IconButton(
                         onClick = {
                             newName = ""
@@ -417,6 +443,60 @@ fun MainScreen(viewModel: MainViewModel) {
                             Spacer(modifier = Modifier.height(6.dp))
                             TextButton(onClick = { viewModel.cancelSimulation() }) {
                                 Text("Cancelar Teste", color = Color.White, fontSize = 12.sp)
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                }
+
+                // Banner de Nova Atualização do Repositório Disponível
+                if (updateInfo?.isUpdateAvailable == true) {
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF26190B)),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .border(1.dp, Color(0xFFFF9800), RoundedCornerShape(12.dp))
+                            .clickable { viewModel.openUpdateDialog() }
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .background(Color(0xFFE65100), CircleShape),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(Icons.Default.CloudDownload, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+                                }
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Column {
+                                    Text(
+                                        text = "Nova Versão ${updateInfo?.latestVersionTag} Disponível!",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 13.sp,
+                                        color = Color.White
+                                    )
+                                    Text(
+                                        text = "Toque para baixar o APK e ver sugestões do repositório",
+                                        fontSize = 11.sp,
+                                        color = Color(0xFFFFCC80)
+                                    )
+                                }
+                            }
+                            Button(
+                                onClick = { viewModel.openUpdateDialog() },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE65100)),
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Text("Atualizar", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
@@ -1597,6 +1677,179 @@ fun MainScreen(viewModel: MainViewModel) {
                     showAddDialog = false
                 }) {
                     Text("Cancelar")
+                }
+            }
+        )
+    }
+
+    // Diálogo de Atualizações e Sugestões do Repositório
+    if (showUpdateDialog) {
+        val info = updateInfo
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissUpdateDialog() },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        if (info?.isUpdateAvailable == true) Icons.Default.CloudDownload else Icons.Default.CheckCircle,
+                        contentDescription = null,
+                        tint = if (info?.isUpdateAvailable == true) Color(0xFFFF9800) else Color(0xFF66BB6A),
+                        modifier = Modifier.size(26.dp)
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text(
+                        text = if (info?.isUpdateAvailable == true) "Nova Atualização Disponível!" else "Aplicativo Atualizado",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 17.sp,
+                        color = Color.White
+                    )
+                }
+            },
+            text = {
+                Column(
+                    modifier = Modifier
+                        .verticalScroll(rememberScrollState())
+                        .padding(vertical = 4.dp)
+                ) {
+                    if (info != null) {
+                        // Badge de Versão
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color(0xFF212121))
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("Versão Atual: ${info.currentVersionTag}", fontSize = 12.sp, color = Color.LightGray)
+                            Text("Mais Recente: ${info.latestVersionTag}", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFFFFB74D))
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        // Progresso de Download (se baixando)
+                        if (updateDownloadProgress != null) {
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = Color(0xFF1B2B1E)),
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(modifier = Modifier.padding(12.dp)) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text("Baixando atualização do APK...", fontSize = 12.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                                        Text("${updateDownloadProgress}%", fontSize = 12.sp, color = Color(0xFF81C784), fontWeight = FontWeight.Bold)
+                                    }
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    LinearProgressIndicator(
+                                        progress = { (updateDownloadProgress ?: 0) / 100f },
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(8.dp)
+                                            .clip(RoundedCornerShape(4.dp)),
+                                        color = Color(0xFF66BB6A),
+                                        trackColor = Color(0xFF0F1A12)
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(12.dp))
+                        }
+
+                        // Mensagem de Erro (se houver)
+                        if (updateErrorMessage != null) {
+                            Text(
+                                text = updateErrorMessage ?: "",
+                                color = Color(0xFFFF5252),
+                                fontSize = 12.sp,
+                                modifier = Modifier.padding(bottom = 8.dp)
+                            )
+                        }
+
+                        // SEÇÃO: SUGESTÕES E RECOMENDAÇÕES DO REPOSITÓRIO
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFF1A1A2E)),
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .border(1.dp, Color(0xFF7C4DFF).copy(alpha = 0.5f), RoundedCornerShape(10.dp))
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Default.TipsAndUpdates, contentDescription = null, tint = Color(0xFFB388FF), modifier = Modifier.size(18.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("💡 Sugestões do Repositório:", fontWeight = FontWeight.Bold, color = Color.White, fontSize = 13.sp)
+                                }
+                                Spacer(modifier = Modifier.height(6.dp))
+                                info.repoSuggestions.forEach { suggestion ->
+                                    Text(
+                                        text = "• $suggestion",
+                                        fontSize = 11.sp,
+                                        color = Color(0xFFD1C4E9),
+                                        lineHeight = 15.sp,
+                                        modifier = Modifier.padding(vertical = 2.dp)
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        // SEÇÃO: NOTAS DA VERSÃO NO GITHUB
+                        if (info.releaseNotes.isNotBlank()) {
+                            Text("📝 O que há de novo no repositório:", fontWeight = FontWeight.Bold, color = Color.White, fontSize = 13.sp)
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = info.releaseNotes,
+                                fontSize = 11.sp,
+                                color = Color.LightGray,
+                                lineHeight = 15.sp
+                            )
+                        }
+                    } else if (isCheckingUpdates) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color(0xFFFF9800), strokeWidth = 2.dp)
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text("Consultando repositório GitHub...", fontSize = 13.sp, color = Color.White)
+                        }
+                    } else {
+                        Text(
+                            text = updateErrorMessage ?: "Não foi possível obter dados do repositório.",
+                            fontSize = 13.sp,
+                            color = Color.LightGray
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                if (info?.isUpdateAvailable == true && info.apkDownloadUrl != null) {
+                    Button(
+                        onClick = {
+                            viewModel.startApkDownload(info.apkDownloadUrl)
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE65100))
+                    ) {
+                        Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Baixar Atualização", fontWeight = FontWeight.Bold)
+                    }
+                } else if (info != null) {
+                    Button(
+                        onClick = {
+                            viewModel.openRepositoryReleasePage(info.htmlUrl)
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1976D2))
+                    ) {
+                        Icon(Icons.Default.OpenInBrowser, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Ver no GitHub")
+                    }
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.dismissUpdateDialog() }) {
+                    Text("Fechar", color = Color.Gray)
                 }
             }
         )
