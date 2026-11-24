@@ -13,6 +13,7 @@ import com.emergencycall.bypass.service.EmergencyCallRingerService
 import com.emergencycall.bypass.service.EmergencyMonitorService
 import com.emergencycall.bypass.service.SosEmitterService
 import com.emergencycall.bypass.util.AppUpdateInfo
+import com.emergencycall.bypass.util.LocationHelper
 import com.emergencycall.bypass.util.PermissionHelper
 import com.emergencycall.bypass.util.UpdateManager
 import kotlinx.coroutines.Job
@@ -30,6 +31,7 @@ data class PermissionsStatus(
     val hasSmsPermissions: Boolean = false,
     val hasSendSmsPermission: Boolean = false,
     val hasLocationPermissions: Boolean = false,
+    val isLocationEnabled: Boolean = false,
     val hasCallPhonePermission: Boolean = false,
     val hasReadContactsPermission: Boolean = false,
     val isIgnoringBattery: Boolean = false,
@@ -125,6 +127,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             hasSmsPermissions = PermissionHelper.hasSmsPermissions(app),
             hasSendSmsPermission = PermissionHelper.hasSendSmsPermission(app),
             hasLocationPermissions = PermissionHelper.hasLocationPermissions(app),
+            isLocationEnabled = LocationHelper.isLocationEnabled(app),
             hasCallPhonePermission = PermissionHelper.hasCallPhonePermission(app),
             hasReadContactsPermission = PermissionHelper.hasReadContactsPermission(app),
             isIgnoringBattery = PermissionHelper.isIgnoringBatteryOptimizations(app),

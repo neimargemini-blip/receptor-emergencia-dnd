@@ -11,6 +11,9 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraManager
+import android.location.Location
+import android.location.LocationListener
+import android.location.LocationManager
 import android.media.AudioAttributes
 import android.media.AudioManager
 import android.media.MediaPlayer
@@ -18,7 +21,9 @@ import android.media.Ringtone
 import android.media.RingtoneManager
 import android.net.Uri
 import android.os.Build
+import android.os.Bundle
 import android.os.IBinder
+import android.os.Looper
 import android.os.PowerManager
 import android.os.VibrationEffect
 import android.os.Vibrator
@@ -31,6 +36,12 @@ import com.emergencycall.bypass.ui.MainActivity
 import com.emergencycall.bypass.util.LocationHelper
 import com.emergencycall.bypass.util.PermissionHelper
 import com.emergencycall.bypass.util.SmsSenderHelper
+import com.google.android.gms.location.FusedLocationProviderClient
+import com.google.android.gms.location.LocationCallback
+import com.google.android.gms.location.LocationRequest
+import com.google.android.gms.location.LocationResult
+import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.Priority
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -58,6 +69,12 @@ class SosEmitterService : Service() {
     private var previousAlarmVolume: Int? = null
     private var previousRingerMode: Int? = null
     private var previousDndFilter: Int? = null
+
+    // Rastreamento Contínuo de Localização (GPS de Alta Precisão + Rede)
+    private var fusedLocationClient: FusedLocationProviderClient? = null
+    private var locationCallback: LocationCallback? = null
+    private var locationManager: LocationManager? = null
+    private var nativeLocationListener: LocationListener? = null
 
     companion object {
         private const val TAG = "SosEmitterService"
@@ -173,6 +190,9 @@ class SosEmitterService : Service() {
                 Log.e(TAG, "Falha no fallback de startForeground do SOS", e2)
             }
         }
+
+        // 0. Inicia rastreamento contínuo de GPS/Localização e busca cache imediato
+        startContinuousLocationTracking()
 
         // 1. Inicia som de alerta crítico (sirene) até ser parado
         startCriticalAlarmSound()
@@ -427,6 +447,104 @@ class SosEmitterService : Service() {
         }
     }
 
+    // ==================== RASTREAMENTO CONTÍNUO DE LOCALIZAÇÃO (GPS + REDE) ====================
+
+    @SuppressLint("MissingPermission")
+    private fun startContinuousLocationTracking() {
+        if (!PermissionHelper.hasLocationPermissions(this)) {
+            Log.w(TAG, "Permissão de localização não concedida para rastreamento contínuo do SOS")
+            return
+        }
+
+        // 1. Tenta recuperar imediatamente qualquer localização prévia em cache no aparelho (0ms)
+        serviceScope.launch {
+            val lastCached = LocationHelper.getBestLastKnownLocation(this@SosEmitterService)
+            if (lastCached != null && _isSosRunning.value) {
+                updateLocationState(lastCached)
+            }
+        }
+
+        // 2. Registra FusedLocationProviderClient com atualizações contínuas de alta frequência
+        try {
+            if (fusedLocationClient == null) {
+                fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
+            }
+            val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 3000L)
+                .setMinUpdateIntervalMillis(1000L)
+                .setMinUpdateDistanceMeters(0f)
+                .build()
+
+            locationCallback = object : LocationCallback() {
+                override fun onLocationResult(result: LocationResult) {
+                    result.lastLocation?.let { loc ->
+                        updateLocationState(loc)
+                    }
+                }
+            }
+            fusedLocationClient?.requestLocationUpdates(locationRequest, locationCallback!!, Looper.getMainLooper())
+            Log.d(TAG, "Rastreamento contínuo FusedLocation ativado com sucesso")
+        } catch (e: Throwable) {
+            Log.w(TAG, "Erro ao registrar FusedLocationUpdates: ${e.message}")
+        }
+
+        // 3. Registra LocationManager nativo (GPS e Rede Celular/Wi-Fi simultâneos)
+        try {
+            if (locationManager == null) {
+                locationManager = getSystemService(Context.LOCATION_SERVICE) as? LocationManager
+            }
+            nativeLocationListener = object : LocationListener {
+                override fun onLocationChanged(loc: Location) {
+                    updateLocationState(loc)
+                }
+                override fun onProviderDisabled(provider: String) {}
+                override fun onProviderEnabled(provider: String) {}
+                @Deprecated("Deprecated in Java")
+                override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) {}
+            }
+
+            locationManager?.let { lm ->
+                if (lm.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
+                    lm.requestLocationUpdates(LocationManager.GPS_PROVIDER, 3000L, 0f, nativeLocationListener!!, Looper.getMainLooper())
+                }
+                if (lm.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
+                    lm.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 3000L, 0f, nativeLocationListener!!, Looper.getMainLooper())
+                }
+            }
+            Log.d(TAG, "Rastreamento contínuo LocationManager nativo ativado com sucesso")
+        } catch (e: Throwable) {
+            Log.w(TAG, "Erro ao registrar LocationManager updates: ${e.message}")
+        }
+    }
+
+    private fun updateLocationState(loc: Location) {
+        val lat = loc.latitude
+        val lng = loc.longitude
+        _lastCoordinates.value = Pair(lat, lng)
+        val url = LocationHelper.buildMapsLink(lat, lng)
+        _lastMapsUrl.value = url
+        Log.i(TAG, "Coordenadas SOS fixadas: $lat, $lng (precisão: ${loc.accuracy}m, prov: ${loc.provider})")
+    }
+
+    private fun stopContinuousLocationTracking() {
+        try {
+            locationCallback?.let { cb ->
+                fusedLocationClient?.removeLocationUpdates(cb)
+            }
+            locationCallback = null
+        } catch (e: Throwable) {
+            Log.w(TAG, "Erro ao remover updates do FusedLocation: ${e.message}")
+        }
+
+        try {
+            nativeLocationListener?.let { listener ->
+                locationManager?.removeUpdates(listener)
+            }
+            nativeLocationListener = null
+        } catch (e: Throwable) {
+            Log.w(TAG, "Erro ao remover updates do LocationManager: ${e.message}")
+        }
+    }
+
     // ==================== ENVIO DE SMS PERIÓDICO COM LOCALIZAÇÃO ====================
 
     private suspend fun sendLocationSmsToAllContacts() {
@@ -436,20 +554,42 @@ class SosEmitterService : Service() {
             return
         }
 
-        // Obtém localização GPS
-        val location = LocationHelper.getCurrentLocation(this)
+        // Se ainda não temos coordenadas fixadas, tenta obter agora
+        if (_lastCoordinates.value == null) {
+            // Tenta cache primeiro
+            val cached = LocationHelper.getBestLastKnownLocation(this)
+            if (cached != null) {
+                updateLocationState(cached)
+            } else {
+                // Aguarda fix rápido de até 3 segundos dos provedores ativos
+                val fresh = LocationHelper.getCurrentLocation(this, 3000L)
+                if (fresh != null) {
+                    updateLocationState(fresh)
+                }
+            }
+        }
+
+        val currentCoords = _lastCoordinates.value
         val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
         val timeStr = timeFormat.format(Date())
 
-        val mapsUrl = if (location != null) {
-            _lastCoordinates.value = Pair(location.latitude, location.longitude)
-            LocationHelper.buildMapsLink(location.latitude, location.longitude)
+        val (mapsUrl, message) = if (currentCoords != null) {
+            val (lat, lng) = currentCoords
+            val url = LocationHelper.buildMapsLink(lat, lng)
+            val coordsText = LocationHelper.formatCoordinatesText(lat, lng)
+            _lastMapsUrl.value = url
+            Pair(url, "🚨 SOS DE EMERGÊNCIA! Preciso de ajuda imediata! Minha localização: $url ($coordsText) às $timeStr")
         } else {
-            _lastMapsUrl.value ?: "https://www.google.com/maps"
+            val prevUrl = _lastMapsUrl.value
+            if (!prevUrl.isNullOrBlank() && prevUrl.contains("q=")) {
+                Pair(prevUrl, "🚨 SOS DE EMERGÊNCIA! Preciso de ajuda imediata! Minha localização: $prevUrl às $timeStr")
+            } else {
+                Pair(
+                    "https://www.google.com/maps",
+                    "🚨 SOS DE EMERGÊNCIA! Preciso de ajuda imediata! Sinal GPS obtendo satélite às $timeStr"
+                )
+            }
         }
-        _lastMapsUrl.value = mapsUrl
-
-        val message = "🚨 SOS DE EMERGÊNCIA! Preciso de ajuda imediata! Minha localização em tempo real: $mapsUrl (às $timeStr)"
 
         var sentThisRound = 0
         for (contact in contacts) {
@@ -509,10 +649,11 @@ class SosEmitterService : Service() {
         sosJob?.cancel()
         sosJob = null
 
-        // Para Flash, Sirene e Vibração imediatamente
+        // Para Flash, Sirene, Vibração e Rastreamento GPS imediatamente
         stopFlashStrobe()
         stopCriticalAlarmSound()
         stopSosVibration()
+        stopContinuousLocationTracking()
 
         try {
             audioManager?.isSpeakerphoneOn = false

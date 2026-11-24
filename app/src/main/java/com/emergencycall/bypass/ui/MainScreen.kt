@@ -518,6 +518,7 @@ fun MainScreen(viewModel: MainViewModel) {
                             contactsCount = senderContacts.filter { it.isEnabled }.size,
                             hasGpsPermission = permissionsStatus.hasLocationPermissions,
                             hasSmsPermission = permissionsStatus.hasSendSmsPermission,
+                            isGpsHardwareEnabled = permissionsStatus.isLocationEnabled,
                             onRequestGps = {
                                 locationPermissionLauncher.launch(
                                     arrayOf(
@@ -1871,6 +1872,7 @@ fun SosHeroSection(
     contactsCount: Int,
     hasGpsPermission: Boolean,
     hasSmsPermission: Boolean,
+    isGpsHardwareEnabled: Boolean = true,
     onRequestGps: () -> Unit,
     onRequestSms: () -> Unit,
     onOpenSettings: () -> Unit,
@@ -2161,6 +2163,32 @@ fun SosHeroSection(
 
                 if (lastCoordinates != null || !lastMapsUrl.isNullOrBlank()) {
                     Spacer(modifier = Modifier.height(12.dp))
+
+                    if (lastCoordinates != null) {
+                        val (lat, lng) = lastCoordinates
+                        val latStr = String.format(java.util.Locale.US, "%.6f", lat)
+                        val lngStr = String.format(java.util.Locale.US, "%.6f", lng)
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFF00382B)),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(Icons.Default.LocationOn, contentDescription = null, tint = Color(0xFF00E676), modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "Coordenadas: Lat $latStr, Lng $lngStr",
+                                    color = Color(0xFFB9F6CA),
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -2212,8 +2240,8 @@ fun SosHeroSection(
                 }
 
             } else if (sosCountdown == null) {
-                // Permissões de Disparo (se faltar GPS ou SMS)
-                if (!hasGpsPermission || !hasSmsPermission) {
+                // Permissões e Configurações de Disparo (se faltar GPS, SMS ou GPS desligado)
+                if (!hasGpsPermission || !hasSmsPermission || !isGpsHardwareEnabled) {
                     Card(
                         colors = CardDefaults.cardColors(containerColor = Color(0xFF2C1919)),
                         shape = RoundedCornerShape(12.dp),
@@ -2221,7 +2249,7 @@ fun SosHeroSection(
                     ) {
                         Column(modifier = Modifier.padding(14.dp)) {
                             Text(
-                                text = "Permissões Necessárias para Disparar:",
+                                text = "Avisos de Localização e Envio:",
                                 fontWeight = FontWeight.Bold,
                                 color = Color(0xFFFF8A80),
                                 fontSize = 13.sp
@@ -2233,9 +2261,33 @@ fun SosHeroSection(
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Text("GPS (Localização)", color = Color.White, fontSize = 13.sp)
+                                    Text("GPS (Permissão de Localização)", color = Color.White, fontSize = 13.sp)
                                     Button(onClick = onRequestGps, contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)) {
                                         Text("Permitir GPS", fontSize = 11.sp)
+                                    }
+                                }
+                            }
+                            if (hasGpsPermission && !isGpsHardwareEnabled) {
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text("GPS do Aparelho Desligado", color = Color.White, fontSize = 13.sp)
+                                        Text("Ative o GPS nas configurações", color = Color(0xFFFFB74D), fontSize = 11.sp)
+                                    }
+                                    Button(
+                                        onClick = {
+                                            context.startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS).apply {
+                                                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                                            })
+                                        },
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF57C00)),
+                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                                    ) {
+                                        Text("Ligar GPS", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                     }
                                 }
                             }
